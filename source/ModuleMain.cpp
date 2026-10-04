@@ -1,9 +1,18 @@
 #include <YYToolkit/YYTK_Shared.hpp>
 
+#include <cstdio>
+#include <cstdint>
+
 using namespace Aurie;
 using namespace YYTK;
 
+
+// ============================================================
+// VARIABLES GLOBALES
+// ============================================================
+
 static YYTKInterface* g_ModuleInterface = nullptr;
+static AurieModule* g_AutoLootModule = nullptr;
 
 
 // ============================================================
@@ -18,7 +27,7 @@ static void PrintInstanceInfo(
     if (Instance == nullptr)
     {
         g_ModuleInterface->Print(
-            CM_LIGHTRED,
+            CM_LIGHTYELLOW,
             "%s = NULL",
             Prefix
         );
@@ -26,17 +35,102 @@ static void PrintInstanceInfo(
         return;
     }
 
-    CInstanceInternal& Members = Instance->GetMembers();
+    RValue IdValue;
+    RValue XValue;
+    RValue YValue;
 
-    g_ModuleInterface->Print(
-        CM_LIGHTYELLOW,
-        "%s ID=%d OBJ=%d X=%f Y=%f",
-        Prefix,
-        Members.m_ID,
-        Members.m_ObjectIndex,
-        Members.m_X,
-        Members.m_Y
-    );
+    bool HasId = false;
+    bool HasX = false;
+    bool HasY = false;
+
+
+    // --------------------------------------------------------
+    // ID
+    // --------------------------------------------------------
+
+    AurieStatus StatusId =
+        g_ModuleInterface->GetBuiltin(
+            "id",
+            Instance,
+            NULL_INDEX,
+            IdValue
+        );
+
+    if (AurieSuccess(StatusId))
+    {
+        HasId = true;
+    }
+
+
+    // --------------------------------------------------------
+    // X
+    // --------------------------------------------------------
+
+    AurieStatus StatusX =
+        g_ModuleInterface->GetBuiltin(
+            "x",
+            Instance,
+            NULL_INDEX,
+            XValue
+        );
+
+    if (AurieSuccess(StatusX))
+    {
+        HasX = true;
+    }
+
+
+    // --------------------------------------------------------
+    // Y
+    // --------------------------------------------------------
+
+    AurieStatus StatusY =
+        g_ModuleInterface->GetBuiltin(
+            "y",
+            Instance,
+            NULL_INDEX,
+            YValue
+        );
+
+    if (AurieSuccess(StatusY))
+    {
+        HasY = true;
+    }
+
+
+    // --------------------------------------------------------
+    // AFFICHAGE
+    // --------------------------------------------------------
+
+    if (HasId && HasX && HasY)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s ID=%d X=%.2f Y=%.2f",
+            Prefix,
+            IdValue.ToInt32(),
+            XValue.ToDouble(),
+            YValue.ToDouble()
+        );
+    }
+    else if (HasId)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s ID=%d",
+            Prefix,
+            IdValue.ToInt32()
+        );
+    }
+    else
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s Instance=%p",
+            Prefix,
+            static_cast<void*>(Instance)
+        );
+    }
 }
 
 
@@ -52,7 +146,7 @@ static void PrintRValue(
     if (Value == nullptr)
     {
         g_ModuleInterface->Print(
-            CM_LIGHTRED,
+            CM_LIGHTYELLOW,
             "%s = NULL",
             Prefix
         );
@@ -60,213 +154,198 @@ static void PrintRValue(
         return;
     }
 
-    std::string Kind = Value->GetKindName();
 
-
-    // --------------------------------------------------------
-    // ARRAY
-    // --------------------------------------------------------
-
-    if (Value->m_Kind == VALUE_ARRAY)
+    switch (Value->m_Kind)
     {
-        g_ModuleInterface->Print(
-            CM_LIGHTYELLOW,
-            "%s KIND=ARRAY",
-            Prefix
-        );
+        // ----------------------------------------------------
+        // REAL
+        // ----------------------------------------------------
 
-        try
-        {
-            std::vector<RValue> Values = Value->ToVector();
-
-            g_ModuleInterface->Print(
-                CM_LIGHTYELLOW,
-                "%s ARRAY SIZE=%zu",
-                Prefix,
-                Values.size()
-            );
-
-            const size_t MaxValues = 20;
-
-            size_t Count = Values.size();
-
-            if (Count > MaxValues)
-                Count = MaxValues;
-
-
-            for (size_t i = 0; i < Count; i++)
-            {
-                char ElementPrefix[128];
-
-                snprintf(
-                    ElementPrefix,
-                    sizeof(ElementPrefix),
-                    "%s[%zu]",
-                    Prefix,
-                    i
-                );
-
-                PrintRValue(
-                    &Values[i],
-                    ElementPrefix
-                );
-            }
-        }
-        catch (...)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTRED,
-                "%s ERREUR lecture ARRAY",
-                Prefix
-            );
-        }
-
-        return;
-    }
-
-
-    // --------------------------------------------------------
-    // REAL
-    // --------------------------------------------------------
-
-    if (Value->m_Kind == VALUE_REAL)
+    case VALUE_REAL:
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
             "%s KIND=REAL VALUE=%f",
             Prefix,
-            Value->ToDouble()
+            Value->m_Real
         );
 
-        return;
+        break;
     }
 
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------
     // INT32
-    // --------------------------------------------------------
+    // ----------------------------------------------------
 
-    if (Value->m_Kind == VALUE_INT32)
+    case VALUE_INT32:
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
             "%s KIND=INT32 VALUE=%d",
             Prefix,
-            Value->ToInt32()
+            Value->m_i32
         );
 
-        return;
+        break;
     }
 
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------
     // INT64
-    // --------------------------------------------------------
+    // ----------------------------------------------------
 
-    if (Value->m_Kind == VALUE_INT64)
+    case VALUE_INT64:
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
             "%s KIND=INT64 VALUE=%lld",
             Prefix,
-            static_cast<long long>(Value->ToInt64())
+            static_cast<long long>(Value->m_i64)
         );
 
-        return;
+        break;
     }
 
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------
     // BOOL
-    // --------------------------------------------------------
+    // ----------------------------------------------------
 
-    if (Value->m_Kind == VALUE_BOOL)
+    case VALUE_BOOL:
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
             "%s KIND=BOOL VALUE=%s",
             Prefix,
-            Value->ToBoolean() ? "true" : "false"
+            Value->ToBoolean()
+            ? "true"
+            : "false"
         );
 
-        return;
+        break;
     }
 
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------
     // STRING
-    // --------------------------------------------------------
+    // ----------------------------------------------------
 
-    if (Value->m_Kind == VALUE_STRING)
+    case VALUE_STRING:
     {
-        std::string Text = Value->ToString();
+        const char* StringValue =
+            Value->ToCString();
 
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
             "%s KIND=STRING VALUE=%s",
             Prefix,
-            Text.c_str()
+            StringValue
+            ? StringValue
+            : "<null>"
         );
 
-        return;
+        break;
     }
 
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------
     // OBJECT
-    // --------------------------------------------------------
+    // ----------------------------------------------------
 
-    if (Value->m_Kind == VALUE_OBJECT)
+    case VALUE_OBJECT:
     {
         g_ModuleInterface->Print(
-            CM_LIGHTYELLOW,
-            "%s KIND=OBJECT PTR=%p",
-            Prefix,
-            Value->m_Object
+            CM_LIGHTGREEN,
+            "%s KIND=OBJECT",
+            Prefix
         );
 
-        return;
+        break;
     }
 
 
-    // --------------------------------------------------------
-    // NULL / UNDEFINED
-    // --------------------------------------------------------
+    // ----------------------------------------------------
+    // POINTER
+    // ----------------------------------------------------
 
-    if (Value->m_Kind == VALUE_NULL)
+    case VALUE_PTR:
     {
         g_ModuleInterface->Print(
-            CM_LIGHTYELLOW,
+            CM_LIGHTGREEN,
+            "%s KIND=PTR VALUE=%p",
+            Prefix,
+            Value->m_Pointer
+        );
+
+        break;
+    }
+
+
+    // ----------------------------------------------------
+    // ARRAY
+    // ----------------------------------------------------
+
+    case VALUE_ARRAY:
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s KIND=ARRAY",
+            Prefix
+        );
+
+        break;
+    }
+
+
+    // ----------------------------------------------------
+    // NULL
+    // ----------------------------------------------------
+
+    case VALUE_NULL:
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
             "%s KIND=NULL",
             Prefix
         );
 
-        return;
+        break;
     }
 
 
-    if (Value->m_Kind == VALUE_UNDEFINED)
+    // ----------------------------------------------------
+    // UNDEFINED
+    // ----------------------------------------------------
+
+    case VALUE_UNDEFINED:
     {
         g_ModuleInterface->Print(
-            CM_LIGHTYELLOW,
+            CM_LIGHTGREEN,
             "%s KIND=UNDEFINED",
             Prefix
         );
 
-        return;
+        break;
     }
 
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------
     // AUTRE
-    // --------------------------------------------------------
+    // ----------------------------------------------------
 
-    g_ModuleInterface->Print(
-        CM_LIGHTYELLOW,
-        "%s KIND=%s",
-        Prefix,
-        Kind.c_str()
-    );
+    default:
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s KIND=%s",
+            Prefix,
+            Value->GetKindName().c_str()
+        );
+
+        break;
+    }
+    }
 }
 
 
@@ -274,7 +353,7 @@ static void PrintRValue(
 // HOOK : scr_pick_up_item
 // ============================================================
 
-RValue& PickUpItemHook(
+RValue& PickUpHook(
     IN CInstance* Self,
     IN CInstance* Other,
     OUT RValue& Result,
@@ -282,26 +361,30 @@ RValue& PickUpItemHook(
     IN RValue** Arguments
 )
 {
-    static uint32_t call_counter = 0;
+    static uint32_t CallCounter = 0;
 
-    call_counter++;
+    CallCounter++;
+
 
     g_ModuleInterface->Print(
         CM_LIGHTGREEN,
         "[AutoLoot] PICKUP call=%u args=%d",
-        call_counter,
+        CallCounter,
         ArgumentCount
     );
+
 
     PrintInstanceInfo(
         Self,
         "[AutoLoot] PICKUP Self"
     );
 
+
     PrintInstanceInfo(
         Other,
         "[AutoLoot] PICKUP Other"
     );
+
 
     for (int i = 0; i < ArgumentCount; i++)
     {
@@ -321,15 +404,16 @@ RValue& PickUpItemHook(
     }
 
 
-    const PFUNC_YYGMLScript original =
+    const PFUNC_YYGMLScript Original =
         reinterpret_cast<PFUNC_YYGMLScript>(
             MmGetHookTrampoline(
-                g_ArSelfModule,
-                "PickUpItem"
+                g_AutoLootModule,
+                "PickUp"
             )
             );
 
-    if (!original)
+
+    if (!Original)
     {
         g_ModuleInterface->Print(
             CM_LIGHTRED,
@@ -340,7 +424,7 @@ RValue& PickUpItemHook(
     }
 
 
-    original(
+    Original(
         Self,
         Other,
         Result,
@@ -348,17 +432,16 @@ RValue& PickUpItemHook(
         Arguments
     );
 
+
     return Result;
 }
 
 
 // ============================================================
-// HOOK : obj_loot Step
-//
-// gml_Object_obj_loot_Step_0
+// HOOK : scr_gold_loot
 // ============================================================
 
-RValue& LootStepHook(
+RValue& GoldLootHook(
     IN CInstance* Self,
     IN CInstance* Other,
     OUT RValue& Result,
@@ -366,60 +449,163 @@ RValue& LootStepHook(
     IN RValue** Arguments
 )
 {
-    UNREFERENCED_PARAMETER(Other);
-    UNREFERENCED_PARAMETER(Arguments);
+    static uint32_t CallCounter = 0;
 
-    static uint32_t frame_counter = 0;
-
-    frame_counter++;
+    CallCounter++;
 
 
-    // --------------------------------------------------------
-    // On ne log qu'une fois toutes les 60 exécutions
-    // pour éviter de saturer le log.
-    // --------------------------------------------------------
+    g_ModuleInterface->Print(
+        CM_LIGHTGREEN,
+        "[AutoLoot] GOLD_LOOT call=%u args=%d",
+        CallCounter,
+        ArgumentCount
+    );
 
-    if ((frame_counter % 60) == 0)
+
+    PrintInstanceInfo(
+        Self,
+        "[AutoLoot] GOLD_LOOT Self"
+    );
+
+
+    PrintInstanceInfo(
+        Other,
+        "[AutoLoot] GOLD_LOOT Other"
+    );
+
+
+    for (int i = 0; i < ArgumentCount; i++)
     {
-        g_ModuleInterface->Print(
-            CM_LIGHTGREEN,
-            "[AutoLoot] LOOT_STEP call=%u args=%d",
-            frame_counter,
-            ArgumentCount
+        char Prefix[128];
+
+        snprintf(
+            Prefix,
+            sizeof(Prefix),
+            "[AutoLoot] GOLD_LOOT ARG[%d]",
+            i
         );
 
-        PrintInstanceInfo(
-            Self,
-            "[AutoLoot] LOOT_STEP Self"
+        PrintRValue(
+            Arguments[i],
+            Prefix
         );
     }
 
 
-    // --------------------------------------------------------
-    // Trampoline original
-    // --------------------------------------------------------
-
-    const PFUNC_YYGMLScript original =
+    const PFUNC_YYGMLScript Original =
         reinterpret_cast<PFUNC_YYGMLScript>(
             MmGetHookTrampoline(
-                g_ArSelfModule,
-                "LootStep"
+                g_AutoLootModule,
+                "GoldLoot"
             )
             );
 
 
-    if (!original)
+    if (!Original)
     {
         g_ModuleInterface->Print(
             CM_LIGHTRED,
-            "[AutoLoot] LOOT_STEP : trampoline introuvable"
+            "[AutoLoot] GOLD_LOOT : trampoline introuvable"
         );
 
         return Result;
     }
 
 
-    original(
+    Original(
+        Self,
+        Other,
+        Result,
+        ArgumentCount,
+        Arguments
+    );
+
+
+    return Result;
+}
+
+
+// ============================================================
+// HOOK : scr_hero_activate
+// ============================================================
+
+RValue& HeroActivateHook(
+    IN CInstance* Self,
+    IN CInstance* Other,
+    OUT RValue& Result,
+    IN int ArgumentCount,
+    IN RValue** Arguments
+)
+{
+    static uint32_t CallCounter = 0;
+
+    CallCounter++;
+
+
+    // On limite le spam à 20 appels
+    if (CallCounter <= 20)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "[AutoLoot] HERO_ACTIVATE call=%u args=%d",
+            CallCounter,
+            ArgumentCount
+        );
+
+
+        PrintInstanceInfo(
+            Self,
+            "[AutoLoot] HERO_ACTIVATE Self"
+        );
+
+
+        PrintInstanceInfo(
+            Other,
+            "[AutoLoot] HERO_ACTIVATE Other"
+        );
+
+
+        for (int i = 0; i < ArgumentCount; i++)
+        {
+            char Prefix[128];
+
+            snprintf(
+                Prefix,
+                sizeof(Prefix),
+                "[AutoLoot] HERO_ACTIVATE ARG[%d]",
+                i
+            );
+
+
+            PrintRValue(
+                Arguments[i],
+                Prefix
+            );
+        }
+    }
+
+
+    const PFUNC_YYGMLScript Original =
+        reinterpret_cast<PFUNC_YYGMLScript>(
+            MmGetHookTrampoline(
+                g_AutoLootModule,
+                "HeroActivate"
+            )
+            );
+
+
+    if (!Original)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "[AutoLoot] HERO_ACTIVATE : trampoline introuvable"
+        );
+
+        return Result;
+    }
+
+
+    Original(
         Self,
         Other,
         Result,
@@ -442,19 +628,28 @@ EXPORTED AurieStatus ModuleInitialize(
 )
 {
     UNREFERENCED_PARAMETER(ModulePath);
-    UNREFERENCED_PARAMETER(Module);
-
-    AurieStatus last_status = AURIE_SUCCESS;
 
 
-    // ========================================================
-    // YYTOOLKIT
-    // ========================================================
+    // Notre propre pointeur de module
+    g_AutoLootModule = Module;
 
-    g_ModuleInterface = YYTK::GetInterface();
+
+    AurieStatus LastStatus =
+        AURIE_SUCCESS;
+
+
+    // --------------------------------------------------------
+    // YYToolkit
+    // --------------------------------------------------------
+
+    g_ModuleInterface =
+        YYTK::GetInterface();
+
 
     if (!g_ModuleInterface)
+    {
         return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
+    }
 
 
     g_ModuleInterface->Print(
@@ -464,23 +659,25 @@ EXPORTED AurieStatus ModuleInitialize(
 
 
     // ========================================================
-    // HOOK : scr_pick_up_item
+    // scr_pick_up_item
     // ========================================================
 
-    CScript* pick_up_script = nullptr;
+    CScript* PickUpScript = nullptr;
 
 
-    last_status =
+    LastStatus =
         g_ModuleInterface->GetNamedRoutinePointer(
             "gml_Script_scr_pick_up_item",
-            reinterpret_cast<PVOID*>(&pick_up_script)
+            reinterpret_cast<PVOID*>(&PickUpScript)
         );
 
 
-    if (AurieSuccess(last_status) &&
-        pick_up_script != nullptr &&
-        pick_up_script->m_Functions != nullptr &&
-        pick_up_script->m_Functions->m_ScriptFunction != nullptr)
+    if (
+        AurieSuccess(LastStatus) &&
+        PickUpScript != nullptr &&
+        PickUpScript->m_Functions != nullptr &&
+        PickUpScript->m_Functions->m_ScriptFunction != nullptr
+        )
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
@@ -488,17 +685,26 @@ EXPORTED AurieStatus ModuleInitialize(
         );
 
 
-        last_status =
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "[AutoLoot] ScriptFunction PickUp = %p",
+            reinterpret_cast<void*>(
+                PickUpScript->m_Functions->m_ScriptFunction
+                )
+        );
+
+
+        LastStatus =
             MmCreateHook(
-                g_ArSelfModule,
-                "PickUpItem",
-                pick_up_script->m_Functions->m_ScriptFunction,
-                PickUpItemHook,
+                g_AutoLootModule,
+                "PickUp",
+                PickUpScript->m_Functions->m_ScriptFunction,
+                PickUpHook,
                 nullptr
             );
 
 
-        if (AurieSuccess(last_status))
+        if (AurieSuccess(LastStatus))
         {
             g_ModuleInterface->Print(
                 CM_LIGHTGREEN,
@@ -509,8 +715,10 @@ EXPORTED AurieStatus ModuleInitialize(
         {
             g_ModuleInterface->Print(
                 CM_LIGHTRED,
-                "[AutoLoot] ECHEC hook PickUpItem : 0x%llX",
-                static_cast<unsigned long long>(last_status)
+                "[AutoLoot] ECHEC hook PickUp : 0x%llX",
+                static_cast<unsigned long long>(
+                    LastStatus
+                    )
             );
         }
     }
@@ -524,53 +732,66 @@ EXPORTED AurieStatus ModuleInitialize(
 
 
     // ========================================================
-    // HOOK : obj_loot Step
+    // scr_gold_loot
     // ========================================================
 
-    CScript* loot_step_script = nullptr;
+    CScript* GoldLootScript = nullptr;
 
 
-    last_status =
+    LastStatus =
         g_ModuleInterface->GetNamedRoutinePointer(
-            "gml_Object_obj_loot_Step_0",
-            reinterpret_cast<PVOID*>(&loot_step_script)
+            "gml_Script_scr_gold_loot",
+            reinterpret_cast<PVOID*>(&GoldLootScript)
         );
 
 
-    if (AurieSuccess(last_status) &&
-        loot_step_script != nullptr &&
-        loot_step_script->m_Functions != nullptr &&
-        loot_step_script->m_Functions->m_ScriptFunction != nullptr)
+    if (
+        AurieSuccess(LastStatus) &&
+        GoldLootScript != nullptr &&
+        GoldLootScript->m_Functions != nullptr &&
+        GoldLootScript->m_Functions->m_ScriptFunction != nullptr
+        )
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
-            "[AutoLoot] obj_loot Step_0 : TROUVE"
+            "[AutoLoot] scr_gold_loot : TROUVE"
         );
 
 
-        last_status =
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "[AutoLoot] ScriptFunction GoldLoot = %p",
+            reinterpret_cast<void*>(
+                GoldLootScript->m_Functions->m_ScriptFunction
+                )
+        );
+
+
+        LastStatus =
             MmCreateHook(
-                g_ArSelfModule,
-                "LootStep",
-                loot_step_script->m_Functions->m_ScriptFunction,
-                LootStepHook,
+                g_AutoLootModule,
+                "GoldLoot",
+                GoldLootScript->m_Functions->m_ScriptFunction,
+                GoldLootHook,
                 nullptr
             );
 
 
-        if (AurieSuccess(last_status))
+        if (AurieSuccess(LastStatus))
         {
             g_ModuleInterface->Print(
                 CM_LIGHTGREEN,
-                "[AutoLoot] HOOK obj_loot_Step_0 INSTALLE"
+                "[AutoLoot] HOOK scr_gold_loot INSTALLE"
             );
         }
         else
         {
             g_ModuleInterface->Print(
                 CM_LIGHTRED,
-                "[AutoLoot] ECHEC hook LootStep : 0x%llX",
-                static_cast<unsigned long long>(last_status)
+                "[AutoLoot] ECHEC hook GoldLoot : 0x%llX",
+                static_cast<unsigned long long>(
+                    LastStatus
+                    )
             );
         }
     }
@@ -578,7 +799,71 @@ EXPORTED AurieStatus ModuleInitialize(
     {
         g_ModuleInterface->Print(
             CM_LIGHTRED,
-            "[AutoLoot] obj_loot Step_0 : INTROUVABLE"
+            "[AutoLoot] scr_gold_loot : INTROUVABLE"
+        );
+    }
+
+
+    // ========================================================
+    // scr_hero_activate
+    // ========================================================
+
+    CScript* HeroActivateScript = nullptr;
+
+
+    LastStatus =
+        g_ModuleInterface->GetNamedRoutinePointer(
+            "gml_Script_scr_hero_activate",
+            reinterpret_cast<PVOID*>(&HeroActivateScript)
+        );
+
+
+    if (
+        AurieSuccess(LastStatus) &&
+        HeroActivateScript != nullptr &&
+        HeroActivateScript->m_Functions != nullptr &&
+        HeroActivateScript->m_Functions->m_ScriptFunction != nullptr
+        )
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "[AutoLoot] scr_hero_activate : TROUVE"
+        );
+
+
+        LastStatus =
+            MmCreateHook(
+                g_AutoLootModule,
+                "HeroActivate",
+                HeroActivateScript->m_Functions->m_ScriptFunction,
+                HeroActivateHook,
+                nullptr
+            );
+
+
+        if (AurieSuccess(LastStatus))
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTGREEN,
+                "[AutoLoot] HOOK scr_hero_activate INSTALLE"
+            );
+        }
+        else
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTRED,
+                "[AutoLoot] ECHEC hook HeroActivate : 0x%llX",
+                static_cast<unsigned long long>(
+                    LastStatus
+                    )
+            );
+        }
+    }
+    else
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "[AutoLoot] scr_hero_activate : INTROUVABLE"
         );
     }
 
@@ -589,8 +874,32 @@ EXPORTED AurieStatus ModuleInitialize(
 
     g_ModuleInterface->Print(
         CM_LIGHTGREEN,
-        "[AutoLoot] INITIALISATION TERMINEE"
+        "[AutoLoot] Initialisation terminee"
     );
+
+
+    return AURIE_SUCCESS;
+}
+
+
+// ============================================================
+// DECHARGEMENT
+// ============================================================
+
+EXPORTED AurieStatus ModuleUnload(
+    IN AurieModule* Module
+)
+{
+    UNREFERENCED_PARAMETER(Module);
+
+
+    if (g_ModuleInterface)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "[AutoLoot] ModuleUnload"
+        );
+    }
 
 
     return AURIE_SUCCESS;
