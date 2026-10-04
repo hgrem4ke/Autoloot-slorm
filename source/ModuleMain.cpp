@@ -7,26 +7,78 @@ static YYTKInterface* g_ModuleInterface = nullptr;
 
 
 // ============================================================
-// Callback exécuté à chaque frame
+// Hook de scr_pick_up_item
 // ============================================================
 
-static void FrameCallback(FWFrame& FrameContext)
+RValue& PickUpItemHook(
+    IN CInstance* Self,
+    IN CInstance* Other,
+    OUT RValue& Result,
+    IN int ArgumentCount,
+    IN RValue** Arguments
+)
 {
-    UNREFERENCED_PARAMETER(FrameContext);
+    UNREFERENCED_PARAMETER(Self);
+    UNREFERENCED_PARAMETER(Other);
+    UNREFERENCED_PARAMETER(Arguments);
 
-    static uint32_t frame_counter = 0;
+    static uint32_t call_counter = 0;
 
-    frame_counter++;
+    call_counter++;
 
-    // Message toutes les 60 frames
-    if ((frame_counter % 60) == 0)
+    // Pour éviter de remplir complètement le log,
+    // on affiche les 20 premiers appels puis 1 appel sur 100.
+    if (call_counter <= 20 ||
+        (call_counter % 100) == 0)
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
-            "[AutoLoot] CALLBACK OK - frame %u",
-            frame_counter
+            "[AutoLoot] scr_pick_up_item APPELE - call=%u args=%d",
+            call_counter,
+            ArgumentCount
         );
     }
+
+
+    // --------------------------------------------------------
+    // Récupération de la fonction originale
+    // --------------------------------------------------------
+
+    const PFUNC_YYGMLScript original =
+        reinterpret_cast<PFUNC_YYGMLScript>(
+            MmGetHookTrampoline(
+                g_ArSelfModule,
+                "PickUpItem"
+            )
+            );
+
+
+    // Sécurité
+    if (!original)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "[AutoLoot] ERREUR : trampoline introuvable"
+        );
+
+        return Result;
+    }
+
+
+    // --------------------------------------------------------
+    // Appel de la fonction originale
+    // --------------------------------------------------------
+
+    original(
+        Self,
+        Other,
+        Result,
+        ArgumentCount,
+        Arguments
+    );
+
+
+    return Result;
 }
 
 
@@ -40,25 +92,25 @@ EXPORTED AurieStatus ModuleInitialize(
 )
 {
     UNREFERENCED_PARAMETER(ModulePath);
+    UNREFERENCED_PARAMETER(Module);
 
-    AurieStatus last_status = AURIE_SUCCESS;
+    AurieStatus last_status =
+        AURIE_SUCCESS;
 
 
     // --------------------------------------------------------
     // Récupération de l'interface YYToolkit
     // --------------------------------------------------------
 
-    g_ModuleInterface = YYTK::GetInterface();
+    g_ModuleInterface =
+        YYTK::GetInterface();
+
 
     if (!g_ModuleInterface)
     {
         return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
     }
 
-
-    // --------------------------------------------------------
-    // Message de démarrage
-    // --------------------------------------------------------
 
     g_ModuleInterface->Print(
         CM_LIGHTGREEN,
@@ -70,51 +122,22 @@ EXPORTED AurieStatus ModuleInitialize(
     // Recherche de scr_pick_up_item
     // --------------------------------------------------------
 
-    PVOID routine = nullptr;
+    CScript* pick_up_script = nullptr;
 
-    AurieStatus routine_status =
+
+    last_status =
         g_ModuleInterface->GetNamedRoutinePointer(
             "gml_Script_scr_pick_up_item",
-            &routine
+            reinterpret_cast<PVOID*>(&pick_up_script)
         );
 
 
-    if (AurieSuccess(routine_status) &&
-        routine != nullptr)
-    {
-        g_ModuleInterface->Print(
-            CM_LIGHTGREEN,
-            "[AutoLoot] scr_pick_up_item : TROUVE (%p)",
-            routine
-        );
-    }
-    else
+    if (!AurieSuccess(last_status) ||
+        pick_up_script == nullptr)
     {
         g_ModuleInterface->Print(
             CM_LIGHTRED,
             "[AutoLoot] scr_pick_up_item : INTROUVABLE"
-        );
-    }
-
-
-    // --------------------------------------------------------
-    // Enregistrement du callback
-    // --------------------------------------------------------
-
-    last_status =
-        g_ModuleInterface->CreateCallback(
-            Module,
-            EVENT_FRAME,
-            FrameCallback,
-            0
-        );
-
-
-    if (!AurieSuccess(last_status))
-    {
-        g_ModuleInterface->Print(
-            CM_LIGHTRED,
-            "[AutoLoot] Echec CreateCallback"
         );
 
         return last_status;
@@ -123,7 +146,62 @@ EXPORTED AurieStatus ModuleInitialize(
 
     g_ModuleInterface->Print(
         CM_LIGHTGREEN,
-        "[AutoLoot] FrameCallback OK"
+        "[AutoLoot] scr_pick_up_item : TROUVE"
+    );
+
+
+    // --------------------------------------------------------
+    // Vérification de la fonction compilée
+    // --------------------------------------------------------
+
+    if (pick_up_script->m_Functions == nullptr ||
+        pick_up_script->m_Functions->m_ScriptFunction == nullptr)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "[AutoLoot] scr_pick_up_item : ScriptFunction invalide"
+        );
+
+        return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
+    }
+
+
+    g_ModuleInterface->Print(
+        CM_LIGHTGREEN,
+        "[AutoLoot] ScriptFunction = %p",
+        pick_up_script->m_Functions->m_ScriptFunction
+    );
+
+
+    // --------------------------------------------------------
+    // Création du hook
+    // --------------------------------------------------------
+
+    last_status =
+        MmCreateHook(
+            g_ArSelfModule,
+            "PickUpItem",
+            pick_up_script->m_Functions->m_ScriptFunction,
+            PickUpItemHook,
+            nullptr
+        );
+
+
+    if (!AurieSuccess(last_status))
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "[AutoLoot] ECHEC MmCreateHook : 0x%llX",
+            static_cast<unsigned long long>(last_status)
+        );
+
+        return last_status;
+    }
+
+
+    g_ModuleInterface->Print(
+        CM_LIGHTGREEN,
+        "[AutoLoot] HOOK scr_pick_up_item INSTALLE"
     );
 
 
