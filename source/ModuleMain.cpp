@@ -7,7 +7,7 @@ static YYTKInterface* g_ModuleInterface = nullptr;
 
 
 // ============================================================
-// Affiche un RValue
+// AFFICHAGE D'UN RVALUE
 // ============================================================
 
 static void PrintRValue(
@@ -26,7 +26,6 @@ static void PrintRValue(
         return;
     }
 
-
     std::string Kind = Value->GetKindName();
 
 
@@ -42,7 +41,6 @@ static void PrintRValue(
             Prefix
         );
 
-
         try
         {
             std::vector<RValue> Values = Value->ToVector();
@@ -54,7 +52,7 @@ static void PrintRValue(
                 Values.size()
             );
 
-
+            // On limite l'affichage pour éviter de remplir le log
             const size_t MaxValues = 50;
 
             size_t Count = Values.size();
@@ -65,19 +63,19 @@ static void PrintRValue(
 
             for (size_t i = 0; i < Count; i++)
             {
-                RValue& Element = Values[i];
+                char ElementPrefix[128];
 
-
-                std::string ElementPrefix =
-                    std::string(Prefix) +
-                    "[" +
-                    std::to_string(i) +
-                    "]";
-
+                snprintf(
+                    ElementPrefix,
+                    sizeof(ElementPrefix),
+                    "%s[%zu]",
+                    Prefix,
+                    i
+                );
 
                 PrintRValue(
-                    &Element,
-                    ElementPrefix.c_str()
+                    &Values[i],
+                    ElementPrefix
                 );
             }
 
@@ -100,7 +98,6 @@ static void PrintRValue(
                 Prefix
             );
         }
-
 
         return;
     }
@@ -254,7 +251,7 @@ static void PrintRValue(
 
 
     // --------------------------------------------------------
-    // AUTRE
+    // AUTRE TYPE
     // --------------------------------------------------------
 
     g_ModuleInterface->Print(
@@ -278,17 +275,10 @@ RValue& PickUpItemHook(
     IN RValue** Arguments
 )
 {
-    UNREFERENCED_PARAMETER(Self);
-    UNREFERENCED_PARAMETER(Other);
-
     static uint32_t call_counter = 0;
 
     call_counter++;
 
-
-    // --------------------------------------------------------
-    // Informations générales
-    // --------------------------------------------------------
 
     g_ModuleInterface->Print(
         CM_LIGHTGREEN,
@@ -299,7 +289,7 @@ RValue& PickUpItemHook(
 
 
     // --------------------------------------------------------
-    // Analyse des arguments
+    // Affichage des arguments
     // --------------------------------------------------------
 
     for (int i = 0; i < ArgumentCount; i++)
@@ -308,31 +298,19 @@ RValue& PickUpItemHook(
         {
             g_ModuleInterface->Print(
                 CM_LIGHTRED,
-                "[AutoLoot] Arguments = NULL"
+                "[AutoLoot] PICKUP Arguments = NULL"
             );
 
             break;
         }
 
 
-        if (Arguments[i] == nullptr)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTYELLOW,
-                "[AutoLoot] ARG[%d] = NULL",
-                i
-            );
-
-            continue;
-        }
-
-
-        char Prefix[64];
+        char Prefix[128];
 
         snprintf(
             Prefix,
             sizeof(Prefix),
-            "[AutoLoot] ARG[%d]",
+            "[AutoLoot] PICKUP ARG[%d]",
             i
         );
 
@@ -345,7 +323,7 @@ RValue& PickUpItemHook(
 
 
     // --------------------------------------------------------
-    // Récupération du trampoline original
+    // Trampoline original
     // --------------------------------------------------------
 
     const PFUNC_YYGMLScript original =
@@ -361,7 +339,7 @@ RValue& PickUpItemHook(
     {
         g_ModuleInterface->Print(
             CM_LIGHTRED,
-            "[AutoLoot] ERREUR : trampoline introuvable"
+            "[AutoLoot] PICKUP : trampoline introuvable"
         );
 
         return Result;
@@ -369,7 +347,130 @@ RValue& PickUpItemHook(
 
 
     // --------------------------------------------------------
-    // Appel de la fonction originale
+    // Appel original
+    // --------------------------------------------------------
+
+    original(
+        Self,
+        Other,
+        Result,
+        ArgumentCount,
+        Arguments
+    );
+
+
+    return Result;
+}
+
+
+// ============================================================
+// HOOK : scr_hero_activate
+// ============================================================
+
+RValue& HeroActivateHook(
+    IN CInstance* Self,
+    IN CInstance* Other,
+    OUT RValue& Result,
+    IN int ArgumentCount,
+    IN RValue** Arguments
+)
+{
+    static uint32_t call_counter = 0;
+
+    call_counter++;
+
+
+    g_ModuleInterface->Print(
+        CM_LIGHTGREEN,
+        "[AutoLoot] HERO_ACTIVATE call=%u args=%d",
+        call_counter,
+        ArgumentCount
+    );
+
+
+    // --------------------------------------------------------
+    // Affichage des arguments
+    // --------------------------------------------------------
+
+    for (int i = 0; i < ArgumentCount; i++)
+    {
+        if (Arguments == nullptr)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTRED,
+                "[AutoLoot] HERO_ACTIVATE Arguments = NULL"
+            );
+
+            break;
+        }
+
+
+        char Prefix[128];
+
+        snprintf(
+            Prefix,
+            sizeof(Prefix),
+            "[AutoLoot] HERO_ACTIVATE ARG[%d]",
+            i
+        );
+
+
+        PrintRValue(
+            Arguments[i],
+            Prefix
+        );
+    }
+
+
+    // --------------------------------------------------------
+    // Informations sur Self / Other
+    // --------------------------------------------------------
+
+    if (Self != nullptr)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTYELLOW,
+            "[AutoLoot] HERO_ACTIVATE Self=%p",
+            Self
+        );
+    }
+
+    if (Other != nullptr)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTYELLOW,
+            "[AutoLoot] HERO_ACTIVATE Other=%p",
+            Other
+        );
+    }
+
+
+    // --------------------------------------------------------
+    // Trampoline original
+    // --------------------------------------------------------
+
+    const PFUNC_YYGMLScript original =
+        reinterpret_cast<PFUNC_YYGMLScript>(
+            MmGetHookTrampoline(
+                g_ArSelfModule,
+                "HeroActivate"
+            )
+            );
+
+
+    if (!original)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "[AutoLoot] HERO_ACTIVATE : trampoline introuvable"
+        );
+
+        return Result;
+    }
+
+
+    // --------------------------------------------------------
+    // Appel original
     // --------------------------------------------------------
 
     original(
@@ -401,9 +502,9 @@ EXPORTED AurieStatus ModuleInitialize(
     AurieStatus last_status = AURIE_SUCCESS;
 
 
-    // --------------------------------------------------------
-    // Récupération de l'interface YYToolkit
-    // --------------------------------------------------------
+    // ========================================================
+    // INTERFACE YYTOOLKIT
+    // ========================================================
 
     g_ModuleInterface = YYTK::GetInterface();
 
@@ -419,11 +520,12 @@ EXPORTED AurieStatus ModuleInitialize(
     );
 
 
-    // --------------------------------------------------------
-    // Recherche de scr_pick_up_item
-    // --------------------------------------------------------
+    // ========================================================
+    // HOOK 1 : scr_pick_up_item
+    // ========================================================
 
     CScript* pick_up_script = nullptr;
+
 
     last_status =
         g_ModuleInterface->GetNamedRoutinePointer(
@@ -439,69 +541,144 @@ EXPORTED AurieStatus ModuleInitialize(
             CM_LIGHTRED,
             "[AutoLoot] scr_pick_up_item : INTROUVABLE"
         );
-
-        return last_status;
     }
-
-
-    g_ModuleInterface->Print(
-        CM_LIGHTGREEN,
-        "[AutoLoot] scr_pick_up_item : TROUVE"
-    );
-
-
-    // --------------------------------------------------------
-    // Vérification ScriptFunction
-    // --------------------------------------------------------
-
-    if (pick_up_script->m_Functions == nullptr ||
-        pick_up_script->m_Functions->m_ScriptFunction == nullptr)
+    else
     {
         g_ModuleInterface->Print(
-            CM_LIGHTRED,
-            "[AutoLoot] scr_pick_up_item : ScriptFunction invalide"
+            CM_LIGHTGREEN,
+            "[AutoLoot] scr_pick_up_item : TROUVE"
         );
 
-        return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
+
+        if (pick_up_script->m_Functions == nullptr ||
+            pick_up_script->m_Functions->m_ScriptFunction == nullptr)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTRED,
+                "[AutoLoot] scr_pick_up_item : ScriptFunction invalide"
+            );
+        }
+        else
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTGREEN,
+                "[AutoLoot] ScriptFunction PickUp = %p",
+                pick_up_script->m_Functions->m_ScriptFunction
+            );
+
+
+            last_status =
+                MmCreateHook(
+                    g_ArSelfModule,
+                    "PickUpItem",
+                    pick_up_script->m_Functions->m_ScriptFunction,
+                    PickUpItemHook,
+                    nullptr
+                );
+
+
+            if (!AurieSuccess(last_status))
+            {
+                g_ModuleInterface->Print(
+                    CM_LIGHTRED,
+                    "[AutoLoot] ECHEC hook PickUpItem : 0x%llX",
+                    static_cast<unsigned long long>(last_status)
+                );
+            }
+            else
+            {
+                g_ModuleInterface->Print(
+                    CM_LIGHTGREEN,
+                    "[AutoLoot] HOOK scr_pick_up_item INSTALLE"
+                );
+            }
+        }
     }
 
 
-    g_ModuleInterface->Print(
-        CM_LIGHTGREEN,
-        "[AutoLoot] ScriptFunction = %p",
-        pick_up_script->m_Functions->m_ScriptFunction
-    );
+    // ========================================================
+    // HOOK 2 : scr_hero_activate
+    // ========================================================
 
+    CScript* hero_activate_script = nullptr;
 
-    // --------------------------------------------------------
-    // Installation du hook
-    // --------------------------------------------------------
 
     last_status =
-        MmCreateHook(
-            g_ArSelfModule,
-            "PickUpItem",
-            pick_up_script->m_Functions->m_ScriptFunction,
-            PickUpItemHook,
-            nullptr
+        g_ModuleInterface->GetNamedRoutinePointer(
+            "gml_Script_scr_hero_activate",
+            reinterpret_cast<PVOID*>(&hero_activate_script)
         );
 
 
-    if (!AurieSuccess(last_status))
+    if (!AurieSuccess(last_status) ||
+        hero_activate_script == nullptr)
     {
         g_ModuleInterface->Print(
             CM_LIGHTRED,
-            "[AutoLoot] ECHEC MmCreateHook : 0x%llX",
-            static_cast<unsigned long long>(last_status)
+            "[AutoLoot] scr_hero_activate : INTROUVABLE"
+        );
+    }
+    else
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "[AutoLoot] scr_hero_activate : TROUVE"
         );
 
-        return last_status;
+
+        if (hero_activate_script->m_Functions == nullptr ||
+            hero_activate_script->m_Functions->m_ScriptFunction == nullptr)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTRED,
+                "[AutoLoot] scr_hero_activate : ScriptFunction invalide"
+            );
+        }
+        else
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTGREEN,
+                "[AutoLoot] ScriptFunction HeroActivate = %p",
+                hero_activate_script->m_Functions->m_ScriptFunction
+            );
+
+
+            last_status =
+                MmCreateHook(
+                    g_ArSelfModule,
+                    "HeroActivate",
+                    hero_activate_script->m_Functions->m_ScriptFunction,
+                    HeroActivateHook,
+                    nullptr
+                );
+
+
+            if (!AurieSuccess(last_status))
+            {
+                g_ModuleInterface->Print(
+                    CM_LIGHTRED,
+                    "[AutoLoot] ECHEC hook HeroActivate : 0x%llX",
+                    static_cast<unsigned long long>(last_status)
+                );
+            }
+            else
+            {
+                g_ModuleInterface->Print(
+                    CM_LIGHTGREEN,
+                    "[AutoLoot] HOOK scr_hero_activate INSTALLE"
+                );
+            }
+        }
     }
 
 
+    // ========================================================
+    // FIN
+    // ========================================================
+
     g_ModuleInterface->Print(
         CM_LIGHTGREEN,
-        "[AutoLoot] HOOK scr_pick_up_item INSTALLE"
+        "[AutoLoot] INITIALISATION TERMINEE"
     );
 
 

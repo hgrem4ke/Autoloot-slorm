@@ -3,6 +3,6 @@
      Création de la bibliothèque D:\git repo\slorm\YYToolkit-stable\Autoloot\x64\Release\AutoLoot.lib et de l'objet D:\git repo\slorm\YYToolkit-stable\Autoloot\x64\Release\AutoLoot.exp
   Génération de code en cours
   Previous IPDB not found, fall back to full compilation.
-  All 366 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  All 350 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
   Fin de la génération du code
   AutoLoot.vcxproj -> D:\git repo\slorm\YYToolkit-stable\Autoloot\x64\Release\AutoLoot.dll
