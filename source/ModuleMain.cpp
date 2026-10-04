@@ -7,6 +7,40 @@ static YYTKInterface* g_ModuleInterface = nullptr;
 
 
 // ============================================================
+// AFFICHAGE DES INFORMATIONS D'UNE INSTANCE
+// ============================================================
+
+static void PrintInstanceInfo(
+    CInstance* Instance,
+    const char* Prefix
+)
+{
+    if (Instance == nullptr)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "%s = NULL",
+            Prefix
+        );
+
+        return;
+    }
+
+    CInstanceInternal& Members = Instance->GetMembers();
+
+    g_ModuleInterface->Print(
+        CM_LIGHTYELLOW,
+        "%s ID=%d OBJ=%d X=%f Y=%f",
+        Prefix,
+        Members.m_ID,
+        Members.m_ObjectIndex,
+        Members.m_X,
+        Members.m_Y
+    );
+}
+
+
+// ============================================================
 // AFFICHAGE D'UN RVALUE
 // ============================================================
 
@@ -52,7 +86,7 @@ static void PrintRValue(
                 Values.size()
             );
 
-            const size_t MaxValues = 50;
+            const size_t MaxValues = 20;
 
             size_t Count = Values.size();
 
@@ -75,17 +109,6 @@ static void PrintRValue(
                 PrintRValue(
                     &Values[i],
                     ElementPrefix
-                );
-            }
-
-
-            if (Values.size() > MaxValues)
-            {
-                g_ModuleInterface->Print(
-                    CM_LIGHTYELLOW,
-                    "%s ... %zu elements non affiches",
-                    Prefix,
-                    Values.size() - MaxValues
                 );
             }
         }
@@ -176,25 +199,14 @@ static void PrintRValue(
 
     if (Value->m_Kind == VALUE_STRING)
     {
-        try
-        {
-            std::string Text = Value->ToString();
+        std::string Text = Value->ToString();
 
-            g_ModuleInterface->Print(
-                CM_LIGHTGREEN,
-                "%s KIND=STRING VALUE=%s",
-                Prefix,
-                Text.c_str()
-            );
-        }
-        catch (...)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTRED,
-                "%s KIND=STRING <ERREUR>",
-                Prefix
-            );
-        }
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s KIND=STRING VALUE=%s",
+            Prefix,
+            Text.c_str()
+        );
 
         return;
     }
@@ -218,7 +230,7 @@ static void PrintRValue(
 
 
     // --------------------------------------------------------
-    // NULL
+    // NULL / UNDEFINED
     // --------------------------------------------------------
 
     if (Value->m_Kind == VALUE_NULL)
@@ -232,10 +244,6 @@ static void PrintRValue(
         return;
     }
 
-
-    // --------------------------------------------------------
-    // UNDEFINED
-    // --------------------------------------------------------
 
     if (Value->m_Kind == VALUE_UNDEFINED)
     {
@@ -263,41 +271,6 @@ static void PrintRValue(
 
 
 // ============================================================
-// AFFICHAGE DES INFOS D'UNE INSTANCE
-// ============================================================
-
-static void PrintInstanceInfo(
-    CInstance* Instance,
-    const char* Prefix
-)
-{
-    if (Instance == nullptr)
-    {
-        g_ModuleInterface->Print(
-            CM_LIGHTRED,
-            "%s INSTANCE = NULL",
-            Prefix
-        );
-
-        return;
-    }
-
-    CInstanceInternal& Members = Instance->GetMembers();
-
-
-    g_ModuleInterface->Print(
-        CM_LIGHTYELLOW,
-        "%s ID=%d OBJ=%d X=%f Y=%f",
-        Prefix,
-        Members.m_ID,
-        Members.m_ObjectIndex,
-        Members.m_X,
-        Members.m_Y
-    );
-}
-
-
-// ============================================================
 // HOOK : scr_pick_up_item
 // ============================================================
 
@@ -313,7 +286,6 @@ RValue& PickUpItemHook(
 
     call_counter++;
 
-
     g_ModuleInterface->Print(
         CM_LIGHTGREEN,
         "[AutoLoot] PICKUP call=%u args=%d",
@@ -321,44 +293,18 @@ RValue& PickUpItemHook(
         ArgumentCount
     );
 
-
-    // --------------------------------------------------------
-    // Informations Self
-    // --------------------------------------------------------
-
     PrintInstanceInfo(
         Self,
         "[AutoLoot] PICKUP Self"
     );
-
-
-    // --------------------------------------------------------
-    // Informations Other
-    // --------------------------------------------------------
 
     PrintInstanceInfo(
         Other,
         "[AutoLoot] PICKUP Other"
     );
 
-
-    // --------------------------------------------------------
-    // Arguments
-    // --------------------------------------------------------
-
     for (int i = 0; i < ArgumentCount; i++)
     {
-        if (Arguments == nullptr)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTRED,
-                "[AutoLoot] PICKUP Arguments = NULL"
-            );
-
-            break;
-        }
-
-
         char Prefix[128];
 
         snprintf(
@@ -368,17 +314,12 @@ RValue& PickUpItemHook(
             i
         );
 
-
         PrintRValue(
             Arguments[i],
             Prefix
         );
     }
 
-
-    // --------------------------------------------------------
-    // Trampoline original
-    // --------------------------------------------------------
 
     const PFUNC_YYGMLScript original =
         reinterpret_cast<PFUNC_YYGMLScript>(
@@ -387,7 +328,6 @@ RValue& PickUpItemHook(
                 "PickUpItem"
             )
             );
-
 
     if (!original)
     {
@@ -400,10 +340,6 @@ RValue& PickUpItemHook(
     }
 
 
-    // --------------------------------------------------------
-    // Appel original
-    // --------------------------------------------------------
-
     original(
         Self,
         Other,
@@ -412,18 +348,17 @@ RValue& PickUpItemHook(
         Arguments
     );
 
-
     return Result;
 }
 
 
 // ============================================================
-// HOOK : obj_loot Other Event 25
+// HOOK : obj_loot Step
 //
-// gml_Object_obj_loot_Other_25
+// gml_Object_obj_loot_Step_0
 // ============================================================
 
-RValue& LootOther25Hook(
+RValue& LootStepHook(
     IN CInstance* Self,
     IN CInstance* Other,
     OUT RValue& Result,
@@ -431,78 +366,32 @@ RValue& LootOther25Hook(
     IN RValue** Arguments
 )
 {
-    static uint32_t call_counter = 0;
+    UNREFERENCED_PARAMETER(Other);
+    UNREFERENCED_PARAMETER(Arguments);
 
-    call_counter++;
+    static uint32_t frame_counter = 0;
+
+    frame_counter++;
 
 
     // --------------------------------------------------------
-    // On limite l'affichage pour éviter de spammer le log
+    // On ne log qu'une fois toutes les 60 exécutions
+    // pour éviter de saturer le log.
     // --------------------------------------------------------
 
-    if (call_counter <= 30 ||
-        (call_counter % 100) == 0)
+    if ((frame_counter % 60) == 0)
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
-            "[AutoLoot] LOOT_OTHER_25 call=%u args=%d",
-            call_counter,
+            "[AutoLoot] LOOT_STEP call=%u args=%d",
+            frame_counter,
             ArgumentCount
         );
 
-
-        // ----------------------------------------------------
-        // Self
-        // ----------------------------------------------------
-
         PrintInstanceInfo(
             Self,
-            "[AutoLoot] LOOT_OTHER_25 Self"
+            "[AutoLoot] LOOT_STEP Self"
         );
-
-
-        // ----------------------------------------------------
-        // Other
-        // ----------------------------------------------------
-
-        PrintInstanceInfo(
-            Other,
-            "[AutoLoot] LOOT_OTHER_25 Other"
-        );
-
-
-        // ----------------------------------------------------
-        // Arguments
-        // ----------------------------------------------------
-
-        for (int i = 0; i < ArgumentCount; i++)
-        {
-            if (Arguments == nullptr)
-            {
-                g_ModuleInterface->Print(
-                    CM_LIGHTRED,
-                    "[AutoLoot] LOOT_OTHER_25 Arguments = NULL"
-                );
-
-                break;
-            }
-
-
-            char Prefix[128];
-
-            snprintf(
-                Prefix,
-                sizeof(Prefix),
-                "[AutoLoot] LOOT_OTHER_25 ARG[%d]",
-                i
-            );
-
-
-            PrintRValue(
-                Arguments[i],
-                Prefix
-            );
-        }
     }
 
 
@@ -514,7 +403,7 @@ RValue& LootOther25Hook(
         reinterpret_cast<PFUNC_YYGMLScript>(
             MmGetHookTrampoline(
                 g_ArSelfModule,
-                "LootOther25"
+                "LootStep"
             )
             );
 
@@ -523,16 +412,12 @@ RValue& LootOther25Hook(
     {
         g_ModuleInterface->Print(
             CM_LIGHTRED,
-            "[AutoLoot] LOOT_OTHER_25 : trampoline introuvable"
+            "[AutoLoot] LOOT_STEP : trampoline introuvable"
         );
 
         return Result;
     }
 
-
-    // --------------------------------------------------------
-    // Appel original
-    // --------------------------------------------------------
 
     original(
         Self,
@@ -548,7 +433,7 @@ RValue& LootOther25Hook(
 
 
 // ============================================================
-// INITIALISATION DU MODULE
+// INITIALISATION
 // ============================================================
 
 EXPORTED AurieStatus ModuleInitialize(
@@ -559,20 +444,17 @@ EXPORTED AurieStatus ModuleInitialize(
     UNREFERENCED_PARAMETER(ModulePath);
     UNREFERENCED_PARAMETER(Module);
 
-
     AurieStatus last_status = AURIE_SUCCESS;
 
 
     // ========================================================
-    // INTERFACE YYTOOLKIT
+    // YYTOOLKIT
     // ========================================================
 
     g_ModuleInterface = YYTK::GetInterface();
 
     if (!g_ModuleInterface)
-    {
         return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
-    }
 
 
     g_ModuleInterface->Print(
@@ -582,7 +464,7 @@ EXPORTED AurieStatus ModuleInitialize(
 
 
     // ========================================================
-    // HOOK 1 : scr_pick_up_item
+    // HOOK : scr_pick_up_item
     // ========================================================
 
     CScript* pick_up_script = nullptr;
@@ -595,15 +477,10 @@ EXPORTED AurieStatus ModuleInitialize(
         );
 
 
-    if (!AurieSuccess(last_status) ||
-        pick_up_script == nullptr)
-    {
-        g_ModuleInterface->Print(
-            CM_LIGHTRED,
-            "[AutoLoot] scr_pick_up_item : INTROUVABLE"
-        );
-    }
-    else
+    if (AurieSuccess(last_status) &&
+        pick_up_script != nullptr &&
+        pick_up_script->m_Functions != nullptr &&
+        pick_up_script->m_Functions->m_ScriptFunction != nullptr)
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
@@ -611,125 +488,98 @@ EXPORTED AurieStatus ModuleInitialize(
         );
 
 
-        if (pick_up_script->m_Functions == nullptr ||
-            pick_up_script->m_Functions->m_ScriptFunction == nullptr)
+        last_status =
+            MmCreateHook(
+                g_ArSelfModule,
+                "PickUpItem",
+                pick_up_script->m_Functions->m_ScriptFunction,
+                PickUpItemHook,
+                nullptr
+            );
+
+
+        if (AurieSuccess(last_status))
         {
             g_ModuleInterface->Print(
-                CM_LIGHTRED,
-                "[AutoLoot] scr_pick_up_item : ScriptFunction invalide"
+                CM_LIGHTGREEN,
+                "[AutoLoot] HOOK scr_pick_up_item INSTALLE"
             );
         }
         else
         {
             g_ModuleInterface->Print(
-                CM_LIGHTGREEN,
-                "[AutoLoot] ScriptFunction PickUp = %p",
-                pick_up_script->m_Functions->m_ScriptFunction
+                CM_LIGHTRED,
+                "[AutoLoot] ECHEC hook PickUpItem : 0x%llX",
+                static_cast<unsigned long long>(last_status)
             );
-
-
-            last_status =
-                MmCreateHook(
-                    g_ArSelfModule,
-                    "PickUpItem",
-                    pick_up_script->m_Functions->m_ScriptFunction,
-                    PickUpItemHook,
-                    nullptr
-                );
-
-
-            if (!AurieSuccess(last_status))
-            {
-                g_ModuleInterface->Print(
-                    CM_LIGHTRED,
-                    "[AutoLoot] ECHEC hook PickUpItem : 0x%llX",
-                    static_cast<unsigned long long>(last_status)
-                );
-            }
-            else
-            {
-                g_ModuleInterface->Print(
-                    CM_LIGHTGREEN,
-                    "[AutoLoot] HOOK scr_pick_up_item INSTALLE"
-                );
-            }
         }
-    }
-
-
-    // ========================================================
-    // HOOK 2 : obj_loot Other Event 25
-    // ========================================================
-
-    CScript* loot_other25_script = nullptr;
-
-
-    last_status =
-        g_ModuleInterface->GetNamedRoutinePointer(
-            "gml_Object_obj_loot_Other_25",
-            reinterpret_cast<PVOID*>(&loot_other25_script)
-        );
-
-
-    if (!AurieSuccess(last_status) ||
-        loot_other25_script == nullptr)
-    {
-        g_ModuleInterface->Print(
-            CM_LIGHTRED,
-            "[AutoLoot] obj_loot Other_25 : INTROUVABLE"
-        );
     }
     else
     {
         g_ModuleInterface->Print(
-            CM_LIGHTGREEN,
-            "[AutoLoot] obj_loot Other_25 : TROUVE"
+            CM_LIGHTRED,
+            "[AutoLoot] scr_pick_up_item : INTROUVABLE"
+        );
+    }
+
+
+    // ========================================================
+    // HOOK : obj_loot Step
+    // ========================================================
+
+    CScript* loot_step_script = nullptr;
+
+
+    last_status =
+        g_ModuleInterface->GetNamedRoutinePointer(
+            "gml_Object_obj_loot_Step_0",
+            reinterpret_cast<PVOID*>(&loot_step_script)
         );
 
 
-        if (loot_other25_script->m_Functions == nullptr ||
-            loot_other25_script->m_Functions->m_ScriptFunction == nullptr)
+    if (AurieSuccess(last_status) &&
+        loot_step_script != nullptr &&
+        loot_step_script->m_Functions != nullptr &&
+        loot_step_script->m_Functions->m_ScriptFunction != nullptr)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "[AutoLoot] obj_loot Step_0 : TROUVE"
+        );
+
+
+        last_status =
+            MmCreateHook(
+                g_ArSelfModule,
+                "LootStep",
+                loot_step_script->m_Functions->m_ScriptFunction,
+                LootStepHook,
+                nullptr
+            );
+
+
+        if (AurieSuccess(last_status))
         {
             g_ModuleInterface->Print(
-                CM_LIGHTRED,
-                "[AutoLoot] obj_loot Other_25 : ScriptFunction invalide"
+                CM_LIGHTGREEN,
+                "[AutoLoot] HOOK obj_loot_Step_0 INSTALLE"
             );
         }
         else
         {
             g_ModuleInterface->Print(
-                CM_LIGHTGREEN,
-                "[AutoLoot] ScriptFunction LootOther25 = %p",
-                loot_other25_script->m_Functions->m_ScriptFunction
+                CM_LIGHTRED,
+                "[AutoLoot] ECHEC hook LootStep : 0x%llX",
+                static_cast<unsigned long long>(last_status)
             );
-
-
-            last_status =
-                MmCreateHook(
-                    g_ArSelfModule,
-                    "LootOther25",
-                    loot_other25_script->m_Functions->m_ScriptFunction,
-                    LootOther25Hook,
-                    nullptr
-                );
-
-
-            if (!AurieSuccess(last_status))
-            {
-                g_ModuleInterface->Print(
-                    CM_LIGHTRED,
-                    "[AutoLoot] ECHEC hook LootOther25 : 0x%llX",
-                    static_cast<unsigned long long>(last_status)
-                );
-            }
-            else
-            {
-                g_ModuleInterface->Print(
-                    CM_LIGHTGREEN,
-                    "[AutoLoot] HOOK obj_loot_Other_25 INSTALLE"
-                );
-            }
         }
+    }
+    else
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "[AutoLoot] obj_loot Step_0 : INTROUVABLE"
+        );
     }
 
 
