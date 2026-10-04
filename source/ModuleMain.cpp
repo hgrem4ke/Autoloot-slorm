@@ -7,7 +7,7 @@ static YYTKInterface* g_ModuleInterface = nullptr;
 
 
 // ============================================================
-// Hook de scr_pick_up_item
+// HOOK : scr_pick_up_item
 // ============================================================
 
 RValue& PickUpItemHook(
@@ -20,28 +20,87 @@ RValue& PickUpItemHook(
 {
     UNREFERENCED_PARAMETER(Self);
     UNREFERENCED_PARAMETER(Other);
-    UNREFERENCED_PARAMETER(Arguments);
 
     static uint32_t call_counter = 0;
 
     call_counter++;
 
-    // Pour éviter de remplir complètement le log,
-    // on affiche les 20 premiers appels puis 1 appel sur 100.
-    if (call_counter <= 20 ||
-        (call_counter % 100) == 0)
+    // --------------------------------------------------------
+    // Affichage de l'appel
+    // --------------------------------------------------------
+
+    g_ModuleInterface->Print(
+        CM_LIGHTGREEN,
+        "[AutoLoot] PICKUP call=%u args=%d",
+        call_counter,
+        ArgumentCount
+    );
+
+
+    // --------------------------------------------------------
+    // Affichage des arguments
+    // --------------------------------------------------------
+
+    for (int i = 0; i < ArgumentCount; i++)
     {
+        if (Arguments == nullptr)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTRED,
+                "[AutoLoot]   Arguments = NULL"
+            );
+
+            break;
+        }
+
+        if (Arguments[i] == nullptr)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTYELLOW,
+                "[AutoLoot]   ARG[%d] = NULL",
+                i
+            );
+
+            continue;
+        }
+
+        RValue* Arg = Arguments[i];
+
+        std::string kind;
+        std::string text;
+
+        try
+        {
+            kind = Arg->GetKindName();
+        }
+        catch (...)
+        {
+            kind = "UNKNOWN";
+        }
+
+        try
+        {
+            text = Arg->ToString();
+        }
+        catch (...)
+        {
+            text = "<ToString ERROR>";
+        }
+
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
-            "[AutoLoot] scr_pick_up_item APPELE - call=%u args=%d",
-            call_counter,
-            ArgumentCount
+            "[AutoLoot]   ARG[%d] kind=%s int=%d int64=%lld text=%s",
+            i,
+            kind.c_str(),
+            Arg->ToInt32(),
+            static_cast<long long>(Arg->ToInt64()),
+            text.c_str()
         );
     }
 
 
     // --------------------------------------------------------
-    // Récupération de la fonction originale
+    // Appel de la fonction originale
     // --------------------------------------------------------
 
     const PFUNC_YYGMLScript original =
@@ -53,7 +112,6 @@ RValue& PickUpItemHook(
             );
 
 
-    // Sécurité
     if (!original)
     {
         g_ModuleInterface->Print(
@@ -66,7 +124,7 @@ RValue& PickUpItemHook(
 
 
     // --------------------------------------------------------
-    // Appel de la fonction originale
+    // Appel original
     // --------------------------------------------------------
 
     original(
@@ -83,7 +141,7 @@ RValue& PickUpItemHook(
 
 
 // ============================================================
-// Initialisation du plugin
+// INITIALISATION DU MODULE
 // ============================================================
 
 EXPORTED AurieStatus ModuleInitialize(
@@ -94,17 +152,15 @@ EXPORTED AurieStatus ModuleInitialize(
     UNREFERENCED_PARAMETER(ModulePath);
     UNREFERENCED_PARAMETER(Module);
 
-    AurieStatus last_status =
-        AURIE_SUCCESS;
+
+    AurieStatus last_status = AURIE_SUCCESS;
 
 
     // --------------------------------------------------------
     // Récupération de l'interface YYToolkit
     // --------------------------------------------------------
 
-    g_ModuleInterface =
-        YYTK::GetInterface();
-
+    g_ModuleInterface = YYTK::GetInterface();
 
     if (!g_ModuleInterface)
     {
@@ -119,11 +175,10 @@ EXPORTED AurieStatus ModuleInitialize(
 
 
     // --------------------------------------------------------
-    // Recherche de scr_pick_up_item
+    // Recherche du script GameMaker
     // --------------------------------------------------------
 
     CScript* pick_up_script = nullptr;
-
 
     last_status =
         g_ModuleInterface->GetNamedRoutinePointer(
@@ -151,7 +206,7 @@ EXPORTED AurieStatus ModuleInitialize(
 
 
     // --------------------------------------------------------
-    // Vérification de la fonction compilée
+    // Vérification de la fonction du script
     // --------------------------------------------------------
 
     if (pick_up_script->m_Functions == nullptr ||
@@ -174,7 +229,7 @@ EXPORTED AurieStatus ModuleInitialize(
 
 
     // --------------------------------------------------------
-    // Création du hook
+    // Installation du hook
     // --------------------------------------------------------
 
     last_status =
