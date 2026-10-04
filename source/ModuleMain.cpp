@@ -52,7 +52,6 @@ static void PrintRValue(
                 Values.size()
             );
 
-            // On limite l'affichage pour éviter de remplir le log
             const size_t MaxValues = 50;
 
             size_t Count = Values.size();
@@ -251,7 +250,7 @@ static void PrintRValue(
 
 
     // --------------------------------------------------------
-    // AUTRE TYPE
+    // AUTRE
     // --------------------------------------------------------
 
     g_ModuleInterface->Print(
@@ -259,6 +258,41 @@ static void PrintRValue(
         "%s KIND=%s",
         Prefix,
         Kind.c_str()
+    );
+}
+
+
+// ============================================================
+// AFFICHAGE DES INFOS D'UNE INSTANCE
+// ============================================================
+
+static void PrintInstanceInfo(
+    CInstance* Instance,
+    const char* Prefix
+)
+{
+    if (Instance == nullptr)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "%s INSTANCE = NULL",
+            Prefix
+        );
+
+        return;
+    }
+
+    CInstanceInternal& Members = Instance->GetMembers();
+
+
+    g_ModuleInterface->Print(
+        CM_LIGHTYELLOW,
+        "%s ID=%d OBJ=%d X=%f Y=%f",
+        Prefix,
+        Members.m_ID,
+        Members.m_ObjectIndex,
+        Members.m_X,
+        Members.m_Y
     );
 }
 
@@ -289,7 +323,27 @@ RValue& PickUpItemHook(
 
 
     // --------------------------------------------------------
-    // Affichage des arguments
+    // Informations Self
+    // --------------------------------------------------------
+
+    PrintInstanceInfo(
+        Self,
+        "[AutoLoot] PICKUP Self"
+    );
+
+
+    // --------------------------------------------------------
+    // Informations Other
+    // --------------------------------------------------------
+
+    PrintInstanceInfo(
+        Other,
+        "[AutoLoot] PICKUP Other"
+    );
+
+
+    // --------------------------------------------------------
+    // Arguments
     // --------------------------------------------------------
 
     for (int i = 0; i < ArgumentCount; i++)
@@ -364,10 +418,12 @@ RValue& PickUpItemHook(
 
 
 // ============================================================
-// HOOK : scr_hero_activate
+// HOOK : obj_loot Other Event 25
+//
+// gml_Object_obj_loot_Other_25
 // ============================================================
 
-RValue& HeroActivateHook(
+RValue& LootOther25Hook(
     IN CInstance* Self,
     IN CInstance* Other,
     OUT RValue& Result,
@@ -380,68 +436,73 @@ RValue& HeroActivateHook(
     call_counter++;
 
 
-    g_ModuleInterface->Print(
-        CM_LIGHTGREEN,
-        "[AutoLoot] HERO_ACTIVATE call=%u args=%d",
-        call_counter,
-        ArgumentCount
-    );
-
-
     // --------------------------------------------------------
-    // Affichage des arguments
+    // On limite l'affichage pour éviter de spammer le log
     // --------------------------------------------------------
 
-    for (int i = 0; i < ArgumentCount; i++)
+    if (call_counter <= 30 ||
+        (call_counter % 100) == 0)
     {
-        if (Arguments == nullptr)
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "[AutoLoot] LOOT_OTHER_25 call=%u args=%d",
+            call_counter,
+            ArgumentCount
+        );
+
+
+        // ----------------------------------------------------
+        // Self
+        // ----------------------------------------------------
+
+        PrintInstanceInfo(
+            Self,
+            "[AutoLoot] LOOT_OTHER_25 Self"
+        );
+
+
+        // ----------------------------------------------------
+        // Other
+        // ----------------------------------------------------
+
+        PrintInstanceInfo(
+            Other,
+            "[AutoLoot] LOOT_OTHER_25 Other"
+        );
+
+
+        // ----------------------------------------------------
+        // Arguments
+        // ----------------------------------------------------
+
+        for (int i = 0; i < ArgumentCount; i++)
         {
-            g_ModuleInterface->Print(
-                CM_LIGHTRED,
-                "[AutoLoot] HERO_ACTIVATE Arguments = NULL"
+            if (Arguments == nullptr)
+            {
+                g_ModuleInterface->Print(
+                    CM_LIGHTRED,
+                    "[AutoLoot] LOOT_OTHER_25 Arguments = NULL"
+                );
+
+                break;
+            }
+
+
+            char Prefix[128];
+
+            snprintf(
+                Prefix,
+                sizeof(Prefix),
+                "[AutoLoot] LOOT_OTHER_25 ARG[%d]",
+                i
             );
 
-            break;
+
+            PrintRValue(
+                Arguments[i],
+                Prefix
+            );
         }
-
-
-        char Prefix[128];
-
-        snprintf(
-            Prefix,
-            sizeof(Prefix),
-            "[AutoLoot] HERO_ACTIVATE ARG[%d]",
-            i
-        );
-
-
-        PrintRValue(
-            Arguments[i],
-            Prefix
-        );
-    }
-
-
-    // --------------------------------------------------------
-    // Informations sur Self / Other
-    // --------------------------------------------------------
-
-    if (Self != nullptr)
-    {
-        g_ModuleInterface->Print(
-            CM_LIGHTYELLOW,
-            "[AutoLoot] HERO_ACTIVATE Self=%p",
-            Self
-        );
-    }
-
-    if (Other != nullptr)
-    {
-        g_ModuleInterface->Print(
-            CM_LIGHTYELLOW,
-            "[AutoLoot] HERO_ACTIVATE Other=%p",
-            Other
-        );
     }
 
 
@@ -453,7 +514,7 @@ RValue& HeroActivateHook(
         reinterpret_cast<PFUNC_YYGMLScript>(
             MmGetHookTrampoline(
                 g_ArSelfModule,
-                "HeroActivate"
+                "LootOther25"
             )
             );
 
@@ -462,7 +523,7 @@ RValue& HeroActivateHook(
     {
         g_ModuleInterface->Print(
             CM_LIGHTRED,
-            "[AutoLoot] HERO_ACTIVATE : trampoline introuvable"
+            "[AutoLoot] LOOT_OTHER_25 : trampoline introuvable"
         );
 
         return Result;
@@ -597,58 +658,58 @@ EXPORTED AurieStatus ModuleInitialize(
 
 
     // ========================================================
-    // HOOK 2 : scr_hero_activate
+    // HOOK 2 : obj_loot Other Event 25
     // ========================================================
 
-    CScript* hero_activate_script = nullptr;
+    CScript* loot_other25_script = nullptr;
 
 
     last_status =
         g_ModuleInterface->GetNamedRoutinePointer(
-            "gml_Script_scr_hero_activate",
-            reinterpret_cast<PVOID*>(&hero_activate_script)
+            "gml_Object_obj_loot_Other_25",
+            reinterpret_cast<PVOID*>(&loot_other25_script)
         );
 
 
     if (!AurieSuccess(last_status) ||
-        hero_activate_script == nullptr)
+        loot_other25_script == nullptr)
     {
         g_ModuleInterface->Print(
             CM_LIGHTRED,
-            "[AutoLoot] scr_hero_activate : INTROUVABLE"
+            "[AutoLoot] obj_loot Other_25 : INTROUVABLE"
         );
     }
     else
     {
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
-            "[AutoLoot] scr_hero_activate : TROUVE"
+            "[AutoLoot] obj_loot Other_25 : TROUVE"
         );
 
 
-        if (hero_activate_script->m_Functions == nullptr ||
-            hero_activate_script->m_Functions->m_ScriptFunction == nullptr)
+        if (loot_other25_script->m_Functions == nullptr ||
+            loot_other25_script->m_Functions->m_ScriptFunction == nullptr)
         {
             g_ModuleInterface->Print(
                 CM_LIGHTRED,
-                "[AutoLoot] scr_hero_activate : ScriptFunction invalide"
+                "[AutoLoot] obj_loot Other_25 : ScriptFunction invalide"
             );
         }
         else
         {
             g_ModuleInterface->Print(
                 CM_LIGHTGREEN,
-                "[AutoLoot] ScriptFunction HeroActivate = %p",
-                hero_activate_script->m_Functions->m_ScriptFunction
+                "[AutoLoot] ScriptFunction LootOther25 = %p",
+                loot_other25_script->m_Functions->m_ScriptFunction
             );
 
 
             last_status =
                 MmCreateHook(
                     g_ArSelfModule,
-                    "HeroActivate",
-                    hero_activate_script->m_Functions->m_ScriptFunction,
-                    HeroActivateHook,
+                    "LootOther25",
+                    loot_other25_script->m_Functions->m_ScriptFunction,
+                    LootOther25Hook,
                     nullptr
                 );
 
@@ -657,7 +718,7 @@ EXPORTED AurieStatus ModuleInitialize(
             {
                 g_ModuleInterface->Print(
                     CM_LIGHTRED,
-                    "[AutoLoot] ECHEC hook HeroActivate : 0x%llX",
+                    "[AutoLoot] ECHEC hook LootOther25 : 0x%llX",
                     static_cast<unsigned long long>(last_status)
                 );
             }
@@ -665,7 +726,7 @@ EXPORTED AurieStatus ModuleInitialize(
             {
                 g_ModuleInterface->Print(
                     CM_LIGHTGREEN,
-                    "[AutoLoot] HOOK scr_hero_activate INSTALLE"
+                    "[AutoLoot] HOOK obj_loot_Other_25 INSTALLE"
                 );
             }
         }
