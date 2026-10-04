@@ -7,6 +7,266 @@ static YYTKInterface* g_ModuleInterface = nullptr;
 
 
 // ============================================================
+// Affiche un RValue
+// ============================================================
+
+static void PrintRValue(
+    RValue* Value,
+    const char* Prefix
+)
+{
+    if (Value == nullptr)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTRED,
+            "%s = NULL",
+            Prefix
+        );
+
+        return;
+    }
+
+
+    std::string Kind = Value->GetKindName();
+
+
+    // --------------------------------------------------------
+    // ARRAY
+    // --------------------------------------------------------
+
+    if (Value->m_Kind == VALUE_ARRAY)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTYELLOW,
+            "%s KIND=ARRAY",
+            Prefix
+        );
+
+
+        try
+        {
+            std::vector<RValue> Values = Value->ToVector();
+
+            g_ModuleInterface->Print(
+                CM_LIGHTYELLOW,
+                "%s ARRAY SIZE=%zu",
+                Prefix,
+                Values.size()
+            );
+
+
+            const size_t MaxValues = 50;
+
+            size_t Count = Values.size();
+
+            if (Count > MaxValues)
+                Count = MaxValues;
+
+
+            for (size_t i = 0; i < Count; i++)
+            {
+                RValue& Element = Values[i];
+
+
+                std::string ElementPrefix =
+                    std::string(Prefix) +
+                    "[" +
+                    std::to_string(i) +
+                    "]";
+
+
+                PrintRValue(
+                    &Element,
+                    ElementPrefix.c_str()
+                );
+            }
+
+
+            if (Values.size() > MaxValues)
+            {
+                g_ModuleInterface->Print(
+                    CM_LIGHTYELLOW,
+                    "%s ... %zu elements non affiches",
+                    Prefix,
+                    Values.size() - MaxValues
+                );
+            }
+        }
+        catch (...)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTRED,
+                "%s ERREUR lecture ARRAY",
+                Prefix
+            );
+        }
+
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // REAL
+    // --------------------------------------------------------
+
+    if (Value->m_Kind == VALUE_REAL)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s KIND=REAL VALUE=%f",
+            Prefix,
+            Value->ToDouble()
+        );
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // INT32
+    // --------------------------------------------------------
+
+    if (Value->m_Kind == VALUE_INT32)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s KIND=INT32 VALUE=%d",
+            Prefix,
+            Value->ToInt32()
+        );
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // INT64
+    // --------------------------------------------------------
+
+    if (Value->m_Kind == VALUE_INT64)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s KIND=INT64 VALUE=%lld",
+            Prefix,
+            static_cast<long long>(Value->ToInt64())
+        );
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // BOOL
+    // --------------------------------------------------------
+
+    if (Value->m_Kind == VALUE_BOOL)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTGREEN,
+            "%s KIND=BOOL VALUE=%s",
+            Prefix,
+            Value->ToBoolean() ? "true" : "false"
+        );
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // STRING
+    // --------------------------------------------------------
+
+    if (Value->m_Kind == VALUE_STRING)
+    {
+        try
+        {
+            std::string Text = Value->ToString();
+
+            g_ModuleInterface->Print(
+                CM_LIGHTGREEN,
+                "%s KIND=STRING VALUE=%s",
+                Prefix,
+                Text.c_str()
+            );
+        }
+        catch (...)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTRED,
+                "%s KIND=STRING <ERREUR>",
+                Prefix
+            );
+        }
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // OBJECT
+    // --------------------------------------------------------
+
+    if (Value->m_Kind == VALUE_OBJECT)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTYELLOW,
+            "%s KIND=OBJECT PTR=%p",
+            Prefix,
+            Value->m_Object
+        );
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // NULL
+    // --------------------------------------------------------
+
+    if (Value->m_Kind == VALUE_NULL)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTYELLOW,
+            "%s KIND=NULL",
+            Prefix
+        );
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // UNDEFINED
+    // --------------------------------------------------------
+
+    if (Value->m_Kind == VALUE_UNDEFINED)
+    {
+        g_ModuleInterface->Print(
+            CM_LIGHTYELLOW,
+            "%s KIND=UNDEFINED",
+            Prefix
+        );
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // AUTRE
+    // --------------------------------------------------------
+
+    g_ModuleInterface->Print(
+        CM_LIGHTYELLOW,
+        "%s KIND=%s",
+        Prefix,
+        Kind.c_str()
+    );
+}
+
+
+// ============================================================
 // HOOK : scr_pick_up_item
 // ============================================================
 
@@ -67,150 +327,20 @@ RValue& PickUpItemHook(
         }
 
 
-        RValue* Arg = Arguments[i];
+        char Prefix[64];
 
-
-        // ----------------------------------------------------
-        // Type de l'argument
-        // ----------------------------------------------------
-
-        std::string kind = Arg->GetKindName();
-
-
-        g_ModuleInterface->Print(
-            CM_LIGHTGREEN,
-            "[AutoLoot] ARG[%d] KIND = %s",
-            i,
-            kind.c_str()
+        snprintf(
+            Prefix,
+            sizeof(Prefix),
+            "[AutoLoot] ARG[%d]",
+            i
         );
 
 
-        // ----------------------------------------------------
-        // REAL
-        // ----------------------------------------------------
-
-        if (Arg->m_Kind == VALUE_REAL)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTGREEN,
-                "[AutoLoot] ARG[%d] REAL = %f",
-                i,
-                Arg->ToDouble()
-            );
-        }
-
-
-        // ----------------------------------------------------
-        // INT32
-        // ----------------------------------------------------
-
-        else if (Arg->m_Kind == VALUE_INT32)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTGREEN,
-                "[AutoLoot] ARG[%d] INT32 = %d",
-                i,
-                Arg->ToInt32()
-            );
-        }
-
-
-        // ----------------------------------------------------
-        // INT64
-        // ----------------------------------------------------
-
-        else if (Arg->m_Kind == VALUE_INT64)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTGREEN,
-                "[AutoLoot] ARG[%d] INT64 = %lld",
-                i,
-                static_cast<long long>(Arg->ToInt64())
-            );
-        }
-
-
-        // ----------------------------------------------------
-        // BOOL
-        // ----------------------------------------------------
-
-        else if (Arg->m_Kind == VALUE_BOOL)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTGREEN,
-                "[AutoLoot] ARG[%d] BOOL = %s",
-                i,
-                Arg->ToBoolean() ? "true" : "false"
-            );
-        }
-
-
-        // ----------------------------------------------------
-        // STRING
-        // ----------------------------------------------------
-
-        else if (Arg->m_Kind == VALUE_STRING)
-        {
-            std::string text = Arg->ToString();
-
-            g_ModuleInterface->Print(
-                CM_LIGHTGREEN,
-                "[AutoLoot] ARG[%d] STRING = %s",
-                i,
-                text.c_str()
-            );
-        }
-
-
-        // ----------------------------------------------------
-        // ARRAY
-        // ----------------------------------------------------
-
-        else if (Arg->m_Kind == VALUE_ARRAY)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTYELLOW,
-                "[AutoLoot] ARG[%d] ARRAY",
-                i
-            );
-
-            g_ModuleInterface->Print(
-                CM_LIGHTYELLOW,
-                "[AutoLoot] ARG[%d] ARRAY PTR = %p",
-                i,
-                Arg->m_Pointer
-            );
-        }
-
-
-        // ----------------------------------------------------
-        // OBJECT
-        // ----------------------------------------------------
-
-        else if (Arg->m_Kind == VALUE_OBJECT)
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTYELLOW,
-                "[AutoLoot] ARG[%d] OBJECT PTR = %p",
-                i,
-                Arg->m_Object
-            );
-        }
-
-
-        // ----------------------------------------------------
-        // AUTRE TYPE
-        // ----------------------------------------------------
-
-        else
-        {
-            g_ModuleInterface->Print(
-                CM_LIGHTYELLOW,
-                "[AutoLoot] ARG[%d] TYPE NON TRAITE = %s",
-                i,
-                kind.c_str()
-            );
-        }
+        PrintRValue(
+            Arguments[i],
+            Prefix
+        );
     }
 
 
@@ -321,7 +451,7 @@ EXPORTED AurieStatus ModuleInitialize(
 
 
     // --------------------------------------------------------
-    // Vérification de la fonction du script
+    // Vérification ScriptFunction
     // --------------------------------------------------------
 
     if (pick_up_script->m_Functions == nullptr ||
