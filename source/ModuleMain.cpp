@@ -25,8 +25,9 @@ RValue& PickUpItemHook(
 
     call_counter++;
 
+
     // --------------------------------------------------------
-    // Affichage de l'appel
+    // Informations générales
     // --------------------------------------------------------
 
     g_ModuleInterface->Print(
@@ -38,7 +39,7 @@ RValue& PickUpItemHook(
 
 
     // --------------------------------------------------------
-    // Affichage des arguments
+    // Analyse des arguments
     // --------------------------------------------------------
 
     for (int i = 0; i < ArgumentCount; i++)
@@ -47,60 +48,174 @@ RValue& PickUpItemHook(
         {
             g_ModuleInterface->Print(
                 CM_LIGHTRED,
-                "[AutoLoot]   Arguments = NULL"
+                "[AutoLoot] Arguments = NULL"
             );
 
             break;
         }
 
+
         if (Arguments[i] == nullptr)
         {
             g_ModuleInterface->Print(
                 CM_LIGHTYELLOW,
-                "[AutoLoot]   ARG[%d] = NULL",
+                "[AutoLoot] ARG[%d] = NULL",
                 i
             );
 
             continue;
         }
 
+
         RValue* Arg = Arguments[i];
 
-        std::string kind;
-        std::string text;
 
-        try
-        {
-            kind = Arg->GetKindName();
-        }
-        catch (...)
-        {
-            kind = "UNKNOWN";
-        }
+        // ----------------------------------------------------
+        // Type de l'argument
+        // ----------------------------------------------------
 
-        try
-        {
-            text = Arg->ToString();
-        }
-        catch (...)
-        {
-            text = "<ToString ERROR>";
-        }
+        std::string kind = Arg->GetKindName();
+
 
         g_ModuleInterface->Print(
             CM_LIGHTGREEN,
-            "[AutoLoot]   ARG[%d] kind=%s int=%d int64=%lld text=%s",
+            "[AutoLoot] ARG[%d] KIND = %s",
             i,
-            kind.c_str(),
-            Arg->ToInt32(),
-            static_cast<long long>(Arg->ToInt64()),
-            text.c_str()
+            kind.c_str()
         );
+
+
+        // ----------------------------------------------------
+        // REAL
+        // ----------------------------------------------------
+
+        if (Arg->m_Kind == VALUE_REAL)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTGREEN,
+                "[AutoLoot] ARG[%d] REAL = %f",
+                i,
+                Arg->ToDouble()
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // INT32
+        // ----------------------------------------------------
+
+        else if (Arg->m_Kind == VALUE_INT32)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTGREEN,
+                "[AutoLoot] ARG[%d] INT32 = %d",
+                i,
+                Arg->ToInt32()
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // INT64
+        // ----------------------------------------------------
+
+        else if (Arg->m_Kind == VALUE_INT64)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTGREEN,
+                "[AutoLoot] ARG[%d] INT64 = %lld",
+                i,
+                static_cast<long long>(Arg->ToInt64())
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // BOOL
+        // ----------------------------------------------------
+
+        else if (Arg->m_Kind == VALUE_BOOL)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTGREEN,
+                "[AutoLoot] ARG[%d] BOOL = %s",
+                i,
+                Arg->ToBoolean() ? "true" : "false"
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // STRING
+        // ----------------------------------------------------
+
+        else if (Arg->m_Kind == VALUE_STRING)
+        {
+            std::string text = Arg->ToString();
+
+            g_ModuleInterface->Print(
+                CM_LIGHTGREEN,
+                "[AutoLoot] ARG[%d] STRING = %s",
+                i,
+                text.c_str()
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // ARRAY
+        // ----------------------------------------------------
+
+        else if (Arg->m_Kind == VALUE_ARRAY)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTYELLOW,
+                "[AutoLoot] ARG[%d] ARRAY",
+                i
+            );
+
+            g_ModuleInterface->Print(
+                CM_LIGHTYELLOW,
+                "[AutoLoot] ARG[%d] ARRAY PTR = %p",
+                i,
+                Arg->m_Pointer
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // OBJECT
+        // ----------------------------------------------------
+
+        else if (Arg->m_Kind == VALUE_OBJECT)
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTYELLOW,
+                "[AutoLoot] ARG[%d] OBJECT PTR = %p",
+                i,
+                Arg->m_Object
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // AUTRE TYPE
+        // ----------------------------------------------------
+
+        else
+        {
+            g_ModuleInterface->Print(
+                CM_LIGHTYELLOW,
+                "[AutoLoot] ARG[%d] TYPE NON TRAITE = %s",
+                i,
+                kind.c_str()
+            );
+        }
     }
 
 
     // --------------------------------------------------------
-    // Appel de la fonction originale
+    // Récupération du trampoline original
     // --------------------------------------------------------
 
     const PFUNC_YYGMLScript original =
@@ -124,7 +239,7 @@ RValue& PickUpItemHook(
 
 
     // --------------------------------------------------------
-    // Appel original
+    // Appel de la fonction originale
     // --------------------------------------------------------
 
     original(
@@ -175,7 +290,7 @@ EXPORTED AurieStatus ModuleInitialize(
 
 
     // --------------------------------------------------------
-    // Recherche du script GameMaker
+    // Recherche de scr_pick_up_item
     // --------------------------------------------------------
 
     CScript* pick_up_script = nullptr;
