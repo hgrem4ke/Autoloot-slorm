@@ -1,55 +1,52 @@
-# AutoLoot pour The Slormancer
+# AutoLoot for The Slormancer
 
-Ramène automatiquement sur le héros l'or, l'essence, les objets de quête, les matériaux
-(slormites, slormandrites, slormelines) et le slorm ancien. L'équipement peut aussi être attiré,
-en option.
+Automatically pulls gold, essence, quest items, materials (slormites, slormandrites, slormelines)
+and the elder slorm onto the hero. Equipment can be pulled too, as an option.
 
 ## Installation
 
-Il faut [Aurie Framework](https://github.com/AurieFramework/Aurie) et
-[YYToolkit](https://github.com/AurieFramework/YYToolkit) **v5.0.0c** déjà installés dans le jeu.
+You need [Aurie Framework](https://github.com/AurieFramework/Aurie) and
+[YYToolkit](https://github.com/AurieFramework/YYToolkit) **v5.0.0c** already installed in the game.
 
-Copie `x64/Release/AutoLoot.dll` dans `The Slormancer\mods\Aurie\`.
+Copy `x64/Release/AutoLoot.dll` into `The Slormancer\mods\Aurie\`.
 
-Pour régler le mod à la souris dans le jeu, installe aussi
-[ModMenu](https://github.com/hgrem4ke/ModMenu-slorm). Sans lui, AutoLoot fonctionne quand même,
-avec le clavier et le fichier `AutoLoot.ini`.
+To change the settings with the mouse in game, also install
+[ModMenu](https://github.com/hgrem4ke/ModMenu-slorm). Without it, AutoLoot still works, with the
+keyboard and the `AutoLoot.ini` file.
 
-## Réglages
+## Settings
 
-**Dans le jeu, à la souris** (avec ModMenu) : menu Options → bouton **M** → encadré **AUTOLOOT**.
+**In game, with the mouse** (with ModMenu): Options menu → **M** button → **AUTOLOOT** tile.
 
-**Dans le jeu, au clavier** :
+**In game, with the keyboard**:
 
-| Touche | Effet |
-|--------|-------|
-| F6 | Autoloot activé / désactivé |
-| F7 | Portée plus courte |
-| F8 | Portée plus longue |
-| F9 | Attirer aussi l'équipement : oui / non |
+| Key | Effect |
+|-----|--------|
+| F6 | Autoloot on / off |
+| F7 | Shorter range |
+| F8 | Longer range |
+| F9 | Also pull equipment: yes / no |
 
-**Hors du jeu** : le fichier `AutoLoot.ini` est créé à côté de la DLL au premier lancement.
+**Outside the game**: the `AutoLoot.ini` file is created next to the DLL on first launch.
 
-| Réglage | Valeurs |
-|---------|---------|
-| Enabled | 1 = autoloot actif, 0 = désactivé |
-| Range | portée en pixels, 0 = toute la salle |
-| Equipment | 1 = attire aussi l'équipement (il faut toujours appuyer sur la touche pour le ramasser) |
-| Slormandrites | 1 = ramène les slormandrites, 0 = les laisse au sol |
-| ElderSlorm | 1 = ramène le slorm ancien (orbe violet), 0 = le laisse au sol |
-| Sound | 1 = petit bip quand on change un réglage au clavier |
-| Debug | 1 = messages détaillés, et touche Home pour lister le loot autour du héros |
+| Setting | Values |
+|---------|--------|
+| Enabled | 1 = autoloot on, 0 = off |
+| Range | range in pixels, 0 = whole room |
+| Equipment | 1 = also pulls equipment (you still have to press the key to pick it up) |
+| Slormandrites | 1 = pulls slormandrites, 0 = leaves them on the ground |
+| ElderSlorm | 1 = pulls the elder slorm (purple orb), 0 = leaves it on the ground |
+| Sound | 1 = short beep when a setting is changed with the keyboard |
+| Debug | 1 = detailed messages, and Home key to list the loot around the hero |
 
-## Compilation
+## Building
 
-Visual Studio 2022 ou plus récent, avec « Développement Desktop en C++ ». Ouvre `AutoLoot.vcxproj`
-et compile en **Release / x64**. Les en-têtes d'Aurie, de YYToolkit v5.0.0c et de ModMenu sont dans
-`include/`.
+Visual Studio 2022 or newer, with "Desktop development with C++". Open `AutoLoot.vcxproj` and build
+**Release / x64**. The Aurie, YYToolkit v5.0.0c and ModMenu headers are in `include/`.
 
-## Licence
+## License
 
-AGPL-3.0, voir [LICENSE](LICENSE). Le dossier `include/` contient les en-têtes d'Aurie et de
-YYToolkit (AGPL-3.0, AurieFramework).
+AGPL-3.0, see [LICENSE](LICENSE). The `include/` folder contains the Aurie and YYToolkit headers
+(AGPL-3.0, AurieFramework).
 
-Mod non officiel, sans lien avec les développeurs du jeu. Fais une sauvegarde de ta partie avant le
-premier essai.
+Unofficial mod, not affiliated with the game's developers. Back up your save before the first try.

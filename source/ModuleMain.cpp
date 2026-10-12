@@ -1,12 +1,12 @@
 // ============================================================
-// AutoLoot pour The Slormancer (Aurie + YYToolkit)
+// AutoLoot for The Slormancer (Aurie + YYToolkit)
 //
-// Ramene automatiquement l'or, l'essence et les objets de quete sur le heros.
+// Automatically pulls gold, essence and quest items onto the hero.
 //
-// Reglages (sauvegardes dans AutoLoot.ini, a cote de la DLL) :
-//   - avant le lancement : en editant AutoLoot.ini
-//   - en jeu, au clavier :  F6 autoloot on/off, F7 / F8 portee -/+, F9 equipement
-//   - en jeu, a la souris : bouton "M" dans le menu Options du jeu (si ModMenu.dll est installe)
+// Settings (saved in AutoLoot.ini, next to the DLL):
+//   - before launch: by editing AutoLoot.ini
+//   - in game, keyboard: F6 autoloot on/off, F7 / F8 range -/+, F9 equipment
+//   - in game, mouse: "M" button in the game's Options menu (if ModMenu.dll is installed)
 // ============================================================
 
 #include <YYToolkit/YYTK_Shared.hpp>
@@ -23,50 +23,50 @@ using namespace Aurie;
 using namespace YYTK;
 
 // ============================================================
-// Constantes
+// Constants
 // ============================================================
 
-// Le hook du heros est appele a chaque Step : 6 = environ 20 fois par seconde a 120 fps.
+// The hero hook runs every Step: 6 = about 20 times per second at 120 fps.
 static constexpr int STEP_INTERVAL = 6;
 
-// Mode Debug : un log de diagnostic toutes les N passes.
+// Debug mode: one diagnostic log every N passes.
 static constexpr int LOG_INTERVAL = 20;
 
-// Distance (en pixels) en dessous de laquelle on ne deplace plus le loot.
+// Distance (in pixels) below which loot is no longer moved.
 static constexpr double STOP_DISTANCE = 24.0;
 
-// Raccourcis clavier (codes Windows VK_*).
+// Hotkeys (Windows VK_* codes).
 static constexpr int KEY_TOGGLE = VK_F6;
 static constexpr int KEY_RANGE_DOWN = VK_F7;
 static constexpr int KEY_RANGE_UP = VK_F8;
 static constexpr int KEY_EQUIPMENT = VK_F9;
-static constexpr int KEY_DUMP = VK_HOME;   // Debug : affiche les variables du obj_loot le plus proche
+static constexpr int KEY_DUMP = VK_HOME;   // Debug: dumps the variables of the nearest obj_loot
 
-// Paliers de portee en pixels. Au-dela du dernier : toute la salle (0).
+// Range presets in pixels. Past the last one: whole room (0).
 static constexpr int kRangePresets[] = { 100, 200, 300, 500, 800, 1200 };
 static constexpr int kRangePresetCount = 6;
 
 // ============================================================
-// Reglages (charges depuis AutoLoot.ini, modifiables en jeu)
+// Settings (loaded from AutoLoot.ini, editable in game)
 // ============================================================
 
-static bool g_Enabled = true;    // autoloot actif
-static int  g_Range = 0;       // portee en pixels, 0 = toute la salle
-static bool g_Equipment = false;   // attirer aussi l'equipement (obj_loot)
-static bool g_Slormandrites = true; // ramasser les slormandrites (obj_loot au sprite spr_slormandrite_*)
-static bool g_ElderSlorm = true;    // ramasser le slorm ancien (obj_slorm_anomaly, orbe violet)
-static bool g_Sound = true;    // petit bip quand on change un reglage au clavier
-static bool g_Debug = false;   // logs detailles + espion scr_pick_up_item
+static bool g_Enabled = true;    // autoloot enabled
+static int  g_Range = 0;       // range in pixels, 0 = whole room
+static bool g_Equipment = false;   // also pull equipment (obj_loot)
+static bool g_Slormandrites = true; // pick up slormandrites (obj_loot with a spr_slormandrite_* sprite)
+static bool g_ElderSlorm = true;    // pick up the elder slorm (obj_slorm_anomaly, purple orb)
+static bool g_Sound = true;    // short beep when a setting is changed with the keyboard
+static bool g_Debug = false;   // detailed logs + scr_pick_up_item spy
 
 static char g_ConfigPath[MAX_PATH] = {};
 
-// Derniere position connue du heros (renseignee par le hook du heros).
+// Last known hero position (set by the hero hook).
 static double g_HeroX = 0.0;
 static double g_HeroY = 0.0;
 static bool g_HeroKnown = false;
 
 // ============================================================
-// Globales
+// Globals
 // ============================================================
 
 static YYTKInterface* g_Yytk = nullptr;
@@ -79,23 +79,23 @@ static const char* kLootObjects[] = {
     "obj_gold_coin_stacked",
     "obj_essence",
     "obj_quest_item",
-    "obj_slorm_anomaly",  // slorm ancien (orbe violet, sprite spr_elder_slorm) : collecte par collision avec le heros
-    "obj_loot"            // slormites, slormandrites, slormelines (autolootable) + equipement (si g_Equipment)
+    "obj_slorm_anomaly",  // elder slorm (purple orb, sprite spr_elder_slorm): collected on collision with the hero
+    "obj_loot"            // slormites, slormandrites, slormelines (autolootable) + equipment (if g_Equipment)
 };
 
 // ============================================================
-// Utilitaires GameMaker
+// GameMaker helpers
 // ============================================================
 
-// Convertit une valeur GameMaker numerique en double (via sa representation texte).
+// Converts a numeric GameMaker value to a double (through its text form).
 static double ReadNumber(RValue Value)
 {
     std::string s(Value.ToString());
     return std::atof(s.c_str());
 }
 
-// Lit la position (x, y) d'une instance via les variables integrees de GameMaker.
-// Evite de dependre de la structure interne de CInstance (qui varie selon les en-tetes).
+// Reads an instance's (x, y) position through GameMaker's built-in variables.
+// Avoids depending on CInstance's internal layout (which varies between headers).
 static bool GetInstancePosition(CInstance* Inst, double& X, double& Y)
 {
     if (!Inst || !g_Yytk)
@@ -112,7 +112,7 @@ static bool GetInstancePosition(CInstance* Inst, double& X, double& Y)
     return true;
 }
 
-// Vrai si la valeur GameMaker est "vraie" (true, 1, ou tout nombre non nul).
+// True if the GameMaker value is truthy (true, 1, or any non-zero number).
 static bool IsTrue(RValue Value)
 {
     std::string s(Value.ToString());
@@ -120,7 +120,7 @@ static bool IsTrue(RValue Value)
     return std::atof(s.c_str()) != 0.0;
 }
 
-// Vrai si l'instance possede la variable Name et que sa valeur est vraie.
+// True if the instance has the variable Name and its value is truthy.
 static bool HasTrueFlag(RValue Inst, const char* Name)
 {
     RValue exists = g_Yytk->CallBuiltin("variable_instance_exists", { Inst, Name });
@@ -131,8 +131,8 @@ static bool HasTrueFlag(RValue Inst, const char* Name)
     return IsTrue(value);
 }
 
-// Vrai si l'instance (un obj_loot) est une slormandrite : reconnue a son sprite
-// (spr_slormandrite_0 ... _5), ce qui ne depend pas de la langue du jeu.
+// True if the instance (an obj_loot) is a slormandrite: recognized by its sprite
+// (spr_slormandrite_0 ... _5), which does not depend on the game's language.
 static bool IsSlormandrite(RValue Inst)
 {
     RValue spriteIndex = g_Yytk->CallBuiltin("variable_instance_get", { Inst, "sprite_index" });
@@ -158,21 +158,21 @@ static void ConfigCreateDefaultFile()
         return;
 
     std::fputs(
-        "; Configuration de l'AutoLoot pour The Slormancer\n"
+        "; AutoLoot configuration for The Slormancer\n"
         ";\n"
-        "; Enabled   : 1 = autoloot actif, 0 = desactive\n"
-        "; Range     : portee en pixels. 0 = toute la salle (ex : 300 = proche du heros)\n"
-        "; Equipment : 1 = attire aussi l'equipement vers le heros (il faut toujours\n"
-        ";             appuyer sur la touche pour le ramasser), 0 = laisse au sol.\n"
-        ";             Les slormites / slormandrites / slormelines marques autolootable\n"
-        ";             par le jeu sont toujours ramenes, quelle que soit cette option.\n"
-        "; Slormandrites : 1 = ramene aussi les slormandrites, 0 = les laisse au sol\n"
-        "; ElderSlorm    : 1 = ramene aussi le slorm ancien (orbe violet), 0 = le laisse au sol\n"
-        "; Sound     : 1 = petit bip quand on change un reglage en jeu\n"
-        "; Debug     : 1 = logs detailles dans la fenetre YYToolkit\n"
+        "; Enabled   : 1 = autoloot on, 0 = off\n"
+        "; Range     : range in pixels. 0 = whole room (e.g. 300 = close to the hero)\n"
+        "; Equipment : 1 = also pulls equipment to the hero (you still have to press\n"
+        ";             the key to pick it up), 0 = leaves it on the ground.\n"
+        ";             Slormites / slormandrites / slormelines flagged autolootable\n"
+        ";             by the game are always pulled, whatever this option says.\n"
+        "; Slormandrites : 1 = also pulls slormandrites, 0 = leaves them on the ground\n"
+        "; ElderSlorm    : 1 = also pulls the elder slorm (purple orb), 0 = leaves it on the ground\n"
+        "; Sound     : 1 = short beep when a setting is changed in game\n"
+        "; Debug     : 1 = detailed logs in the console\n"
         ";\n"
-        "; Raccourcis en jeu : F6 on/off, F7 portee -, F8 portee +, F9 equipement\n"
-        "; Page de reglages : bouton M dans le menu Options du jeu\n"
+        "; In-game hotkeys: F6 on/off, F7 range -, F8 range +, F9 equipment\n"
+        "; Settings page: M button in the game's Options menu (needs ModMenu.dll)\n"
         "\n"
         "[AutoLoot]\n"
         "Enabled=1\n"
@@ -204,13 +204,13 @@ static void ConfigLoad()
 }
 
 // ============================================================
-// Reglages en jeu : portee, bascules, raccourcis clavier
+// In-game settings: range, toggles, hotkeys
 // ============================================================
 
 static void DescribeRange(char* Out, size_t Size)
 {
     if (g_Range <= 0)
-        std::snprintf(Out, Size, "toute la salle");
+        std::snprintf(Out, Size, "whole room");
     else
         std::snprintf(Out, Size, "%d px", g_Range);
 }
@@ -218,7 +218,7 @@ static void DescribeRange(char* Out, size_t Size)
 static void RangeIncrease()
 {
     if (g_Range == 0)
-        return;                         // deja au maximum
+        return;                         // already at the maximum
 
     for (int i = 0; i < kRangePresetCount; ++i)
     {
@@ -229,7 +229,7 @@ static void RangeIncrease()
         }
     }
 
-    g_Range = 0;                        // au-dela du dernier palier : toute la salle
+    g_Range = 0;                        // past the last preset: whole room
 }
 
 static void RangeDecrease()
@@ -256,32 +256,32 @@ static void ToggleEnabled()
 {
     g_Enabled = !g_Enabled;
     ConfigWriteInt("Enabled", g_Enabled ? 1 : 0);
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Autoloot : %s", g_Enabled ? "ACTIVE" : "DESACTIVE");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Autoloot: %s", g_Enabled ? "ON" : "OFF");
 }
 
 static void ToggleEquipment()
 {
     g_Equipment = !g_Equipment;
     ConfigWriteInt("Equipment", g_Equipment ? 1 : 0);
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Attirer l'equipement : %s", g_Equipment ? "OUI" : "NON");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Pull equipment: %s", g_Equipment ? "YES" : "NO");
 }
 
 static void ToggleSlormandrites()
 {
     g_Slormandrites = !g_Slormandrites;
     ConfigWriteInt("Slormandrites", g_Slormandrites ? 1 : 0);
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Ramasser les slormandrites : %s", g_Slormandrites ? "OUI" : "NON");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Pick up slormandrites: %s", g_Slormandrites ? "YES" : "NO");
 }
 
 static void ToggleElderSlorm()
 {
     g_ElderSlorm = !g_ElderSlorm;
     ConfigWriteInt("ElderSlorm", g_ElderSlorm ? 1 : 0);
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Ramasser le slorm ancien : %s", g_ElderSlorm ? "OUI" : "NON");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Pick up the elder slorm: %s", g_ElderSlorm ? "YES" : "NO");
 }
 
-// Vrai si la fenetre au premier plan appartient au jeu (evite de reagir aux touches
-// tapees dans une autre application).
+// True if the foreground window belongs to the game (avoids reacting to keys
+// typed in another application).
 static bool GameHasFocus()
 {
     HWND fg = GetForegroundWindow();
@@ -293,7 +293,7 @@ static bool GameHasFocus()
     return pid == GetCurrentProcessId();
 }
 
-// Detecte l'appui (front montant) sur une touche.
+// Detects a key press (rising edge).
 static bool KeyPressedOnce(int Vk, bool& WasDown)
 {
     const bool down = (GetAsyncKeyState(Vk) & 0x8000) != 0;
@@ -309,20 +309,20 @@ static void PlayFeedbackSound(bool High)
 }
 
 // ------------------------------------------------------------
-// Diagnostic (Debug=1) : variables d'une instance, et du obj_loot le plus proche du heros.
+// Diagnostics (Debug=1): variables of an instance, and of the obj_loot nearest to the hero.
 // ------------------------------------------------------------
 
 static void DumpInstance(RValue Inst, const char* Title)
 {
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ===== DUMP : %s =====", Title);
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ===== DUMP: %s =====", Title);
 
     RValue names = g_Yytk->CallBuiltin("variable_instance_get_names", { Inst });
 
     size_t count = 0;
     if (!AurieSuccess(g_Yytk->GetArraySize(names, count)))
     {
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot]   liste des variables illisible");
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ===== FIN DUMP =====");
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot]   variable list unreadable");
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ===== END OF DUMP =====");
         return;
     }
 
@@ -340,7 +340,7 @@ static void DumpInstance(RValue Inst, const char* Title)
         RValue value = g_Yytk->CallBuiltin("variable_instance_get", { Inst, varName.c_str() });
 
         const int kind = static_cast<int>(value.m_Kind);
-        // 0 = reel, 1 = texte, 7 = int32, 10 = int64, 13 = booleen
+        // 0 = real, 1 = string, 7 = int32, 10 = int64, 13 = bool
         if (kind == 0 || kind == 1 || kind == 7 || kind == 10 || kind == 13)
         {
             std::string s(value.ToString());
@@ -353,10 +353,10 @@ static void DumpInstance(RValue Inst, const char* Title)
         }
     }
 
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ===== FIN DUMP =====");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ===== END OF DUMP =====");
 }
 
-// Valeur d'une variable d'instance sous forme de texte court ("-" si elle n'existe pas).
+// Value of an instance variable as short text ("-" if it does not exist).
 static std::string ReadVarText(RValue Inst, const char* Name)
 {
     RValue exists = g_Yytk->CallBuiltin("variable_instance_exists", { Inst, Name });
@@ -374,10 +374,10 @@ static std::string ReadVarText(RValue Inst, const char* Name)
     return "<type " + std::to_string(kind) + ">";
 }
 
-// Une ligne par obj_loot de la salle : de quoi comparer equipement / slormandrite / fragment...
+// One line per obj_loot in the room: enough to compare equipment / slormandrite / fragment...
 static void DumpLootList(RValue ObjAsset, int Count)
 {
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ----- liste des obj_loot (distance | nom | rarete | autolootable | deny_loot | sprite | nb variables) -----");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ----- obj_loot list (distance | name | rarity | autolootable | deny_loot | sprite | variable count) -----");
 
     const int shown = (Count > 25) ? 25 : Count;
     for (int i = 0; i < shown; ++i)
@@ -407,17 +407,17 @@ static void DumpLootList(RValue ObjAsset, int Count)
             static_cast<int>(varCount));
     }
 
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ----- fin de liste -----");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ----- end of list -----");
 }
 
-// Toutes les instances (tous objets confondus) autour du heros : sert a identifier de quel objet
-// est fait un element du decor ou du loot qu'on ne connait pas encore (ex : un orbe au sol).
+// Every instance (of any object) around the hero: used to identify which object
+// a piece of scenery or unknown loot is made of (e.g. an orb on the ground).
 static void DumpNearbyInstances(double Radius)
 {
     if (!g_HeroKnown)
         return;
 
-    RValue all(-3.0);   // constante GameMaker "all"
+    RValue all(-3.0);   // GameMaker "all" constant
     const int n = static_cast<int>(ReadNumber(g_Yytk->CallBuiltin("instance_number", { all })));
     const int limit = (n > 6000) ? 6000 : n;
 
@@ -446,7 +446,7 @@ static void DumpNearbyInstances(double Radius)
 
     std::sort(found.begin(), found.end(), [](const Near& a, const Near& b) { return a.dist < b.dist; });
 
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ----- instances a moins de %.0f px du heros : %d (sur %d dans la salle) -----",
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ----- instances within %.0f px of the hero: %d (out of %d in the room) -----",
         Radius, static_cast<int>(found.size()), n);
 
     const size_t shown = (found.size() > 40) ? 40 : found.size();
@@ -454,10 +454,10 @@ static void DumpNearbyInstances(double Radius)
         DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot]   %.0f px | %s | %s",
             found[i].dist, found[i].object.c_str(), found[i].sprite.c_str());
 
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ----- fin des instances proches -----");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] ----- end of nearby instances -----");
 }
 
-// Variables de l'instance la plus proche du heros pour un objet donne (s'il y en a une).
+// Variables of the instance nearest to the hero for a given object (if there is one).
 static void DumpNearestOfObject(const char* ObjName)
 {
     if (!g_HeroKnown)
@@ -484,7 +484,7 @@ static void DumpNearestOfObject(const char* ObjName)
         }
     }
 
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] %s : %d dans la salle, le plus proche est a %.0f px", ObjName, n, std::sqrt(bestD2));
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] %s: %d in the room, the nearest is %.0f px away", ObjName, n, std::sqrt(bestD2));
 
     RValue best = g_Yytk->CallBuiltin("instance_find", { obj, RValue(static_cast<double>(bestIndex)) });
     DumpInstance(best, ObjName);
@@ -494,7 +494,7 @@ static void DumpNearestLoot()
 {
     if (!g_HeroKnown)
     {
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] diagnostic : position du heros inconnue");
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] diagnostics: hero position unknown");
         return;
     }
 
@@ -504,7 +504,7 @@ static void DumpNearestLoot()
 
     if (n < 1)
     {
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] diagnostic : aucun obj_loot dans la salle");
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] diagnostics: no obj_loot in the room");
         return;
     }
 
@@ -525,12 +525,12 @@ static void DumpNearestLoot()
         }
     }
 
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] diagnostic : %d obj_loot dans la salle, le plus proche est a %.0f px", n, std::sqrt(bestD2));
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] diagnostics: %d obj_loot in the room, the nearest is %.0f px away", n, std::sqrt(bestD2));
 
     DumpLootList(obj, n);
 
     RValue best = g_Yytk->CallBuiltin("instance_find", { obj, RValue(static_cast<double>(bestIndex)) });
-    DumpInstance(best, "obj_loot le plus proche du heros");
+    DumpInstance(best, "obj_loot nearest to the hero");
 }
 
 static void HandleHotkeys()
@@ -559,7 +559,7 @@ static void HandleHotkeys()
     {
         g_Enabled = !g_Enabled;
         ConfigWriteInt("Enabled", g_Enabled ? 1 : 0);
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Autoloot : %s", g_Enabled ? "ACTIVE" : "DESACTIVE");
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Autoloot: %s", g_Enabled ? "ON" : "OFF");
         PlayFeedbackSound(g_Enabled);
     }
 
@@ -568,7 +568,7 @@ static void HandleHotkeys()
         RangeDecrease();
         ConfigWriteInt("Range", g_Range);
         DescribeRange(rangeText, sizeof(rangeText));
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Portee : %s", rangeText);
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Range: %s", rangeText);
         PlayFeedbackSound(true);
     }
 
@@ -577,7 +577,7 @@ static void HandleHotkeys()
         RangeIncrease();
         ConfigWriteInt("Range", g_Range);
         DescribeRange(rangeText, sizeof(rangeText));
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Portee : %s", rangeText);
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Range: %s", rangeText);
         PlayFeedbackSound(true);
     }
 
@@ -585,13 +585,13 @@ static void HandleHotkeys()
     {
         g_Equipment = !g_Equipment;
         ConfigWriteInt("Equipment", g_Equipment ? 1 : 0);
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Attirer l'equipement : %s", g_Equipment ? "OUI" : "NON");
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Pull equipment: %s", g_Equipment ? "YES" : "NO");
         PlayFeedbackSound(g_Equipment);
     }
 }
 
 // ============================================================
-// Hook de scr_hero_step : Self = le heros. C'est ici que le loot est ramene.
+// scr_hero_step hook: Self = the hero. This is where loot is pulled in.
 // ============================================================
 
 RValue& HeroStepHook(
@@ -602,7 +602,7 @@ RValue& HeroStepHook(
     IN RValue* Arguments[]
 )
 {
-    // On laisse d'abord le jeu faire son Step normalement.
+    // Let the game run its Step normally first.
     RValue& Ret = g_OriginalHeroStep(Self, Other, Result, ArgumentCount, Arguments);
 
     double heroX = 0.0, heroY = 0.0;
@@ -620,7 +620,7 @@ RValue& HeroStepHook(
     ++tick;
 
     if (g_Debug && tick == 1)
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] premier appel de scr_hero_step");
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] first scr_hero_step call");
 
     if (!g_Enabled || !heroOk || (tick % STEP_INTERVAL) != 0)
         return Ret;
@@ -635,12 +635,12 @@ RValue& HeroStepHook(
 
     for (const char* name : kLootObjects)
     {
-        // obj_loot regroupe l'equipement ET les materiaux (slormites, slormandrites, slormelines).
-        // Le jeu marque lui-meme les objets qu'il ramasse tout seul avec autolootable = 1 :
-        // ceux-la sont toujours ramenes. Les autres (equipement) seulement si l'option est activee.
+        // obj_loot covers equipment AND materials (slormites, slormandrites, slormelines).
+        // The game itself flags the items it picks up on its own with autolootable = 1:
+        // those are always pulled. The others (equipment) only if the option is on.
         const bool isLootObject = (std::strcmp(name, "obj_loot") == 0);
 
-        // Slorm ancien desactive dans les reglages : on le laisse tranquille.
+        // Elder slorm disabled in the settings: leave it alone.
         if (!g_ElderSlorm && std::strcmp(name, "obj_slorm_anomaly") == 0)
             continue;
 
@@ -652,52 +652,52 @@ RValue& HeroStepHook(
 
         int moved = 0, denied = 0, busy = 0, tooFar = 0, notAuto = 0, filtered = 0;
 
-        // A l'envers : un ramassage peut detruire une instance en cours de route.
+        // Backwards: a pickup can destroy an instance along the way.
         for (int i = n - 1; i >= 0; --i)
         {
             RValue idx(static_cast<double>(i));
             RValue inst = g_Yytk->CallBuiltin("instance_find", { obj, idx });
 
-            // obj_loot non marque autolootable : on ne le ramene que si l'option equipement est active.
+            // obj_loot not flagged autolootable: only pulled if the equipment option is on.
             if (isLootObject && !g_Equipment && !HasTrueFlag(inst, "autolootable"))
             {
                 ++notAuto;
                 continue;
             }
 
-            // Slormandrites desactivees dans les reglages : on les laisse au sol.
+            // Slormandrites disabled in the settings: leave them on the ground.
             if (isLootObject && !g_Slormandrites && IsSlormandrite(inst))
             {
                 ++filtered;
                 continue;
             }
 
-            // Position du loot par rapport au heros.
+            // Loot position relative to the hero.
             double lx = ReadNumber(g_Yytk->CallBuiltin("variable_instance_get", { inst, "x" }));
             double ly = ReadNumber(g_Yytk->CallBuiltin("variable_instance_get", { inst, "y" }));
             double dx = lx - heroX;
             double dy = ly - heroY;
             double d2 = dx * dx + dy * dy;
 
-            // Deja pres du heros : on ne touche plus, le jeu finit son ramassage.
+            // Already close to the hero: hands off, the game finishes the pickup.
             if (d2 <= STOP_DISTANCE * STOP_DISTANCE)
                 continue;
 
-            // Hors de la portee choisie.
+            // Outside the chosen range.
             if (rangeSq > 0.0 && d2 > rangeSq)
             {
                 ++tooFar;
                 continue;
             }
 
-            // Objet non ramassable selon le jeu.
+            // Item the game says cannot be picked up.
             if (HasTrueFlag(inst, "deny_loot"))
             {
                 ++denied;
                 continue;
             }
 
-            // Objet en pleine animation (chute ou ramassage) : on laisse le jeu faire.
+            // Item in the middle of an animation (drop or pickup): let the game handle it.
             if (HasTrueFlag(inst, "drop_animation") || HasTrueFlag(inst, "pick_up_animation"))
             {
                 ++busy;
@@ -711,7 +711,7 @@ RValue& HeroStepHook(
 
         if (doLog && n > 0)
             DbgPrintEx(LOG_SEVERITY_INFO, 
-                "[AutoLoot] %s : %d instances, %d deplacees, %d hors portee, %d en animation, %d deny_loot, %d non autolootable, %d filtrees",
+                "[AutoLoot] %s: %d instances, %d moved, %d out of range, %d animating, %d deny_loot, %d not autolootable, %d filtered",
                 name, n, moved, tooFar, busy, denied, notAuto, filtered);
     }
 
@@ -722,11 +722,11 @@ RValue& HeroStepHook(
 }
 
 // ============================================================
-// Espion sur scr_pick_up_item (mode Debug uniquement) : affiche ce que le jeu envoie
-// quand le joueur ramasse un objet. N'altere rien. Utile pour un futur autoloot d'equipement.
+// scr_pick_up_item spy (Debug mode only): prints what the game passes
+// when the player picks up an item. Changes nothing. Useful for a future equipment autoloot.
 // ============================================================
 
-// Nom de l'objet d'une instance, lu via GameMaker (object_index puis object_get_name).
+// Object name of an instance, read through GameMaker (object_index then object_get_name).
 static std::string InstanceObjectName(CInstance* Inst)
 {
     if (!Inst || !g_Yytk)
@@ -753,7 +753,7 @@ RValue& PickUpHook(
 
     if (printed < 60)
     {
-        std::string line = "scr_pick_up_item : self=";
+        std::string line = "scr_pick_up_item: self=";
         line += InstanceObjectName(Self);
         line += " other=";
         line += InstanceObjectName(Other);
@@ -769,7 +769,7 @@ RValue& PickUpHook(
             }
 
             const int kind = static_cast<int>(a->m_Kind);
-            // 0 = reel, 1 = texte, 7 = int32, 10 = int64, 13 = booleen
+            // 0 = real, 1 = string, 7 = int32, 10 = int64, 13 = bool
             if (kind == 0 || kind == 1 || kind == 7 || kind == 10 || kind == 13)
             {
                 std::string s(a->ToString());
@@ -782,7 +782,7 @@ RValue& PickUpHook(
             }
         }
 
-        // On n'affiche pas deux fois de suite exactement la meme ligne.
+        // Never print the exact same line twice in a row.
         if (line != last)
         {
             last = line;
@@ -795,23 +795,18 @@ RValue& PickUpHook(
 }
 
 // ============================================================
-// Page de reglages dans le menu des mods (bouton "M" du menu Options).
+// Settings page in the mods menu ("M" button of the Options menu).
 //
-// Le menu lui-meme est dans ModMenu.dll : on s'y enregistre s'il est installe. Sans lui,
-// l'autoloot fonctionne quand meme, avec AutoLoot.ini et les raccourcis clavier.
+// The menu itself lives in ModMenu.dll: we register with it if it is installed. Without it,
+// autoloot still works, with AutoLoot.ini and the hotkeys.
 // ============================================================
-
-// Textes avec accents (UTF-8 explicite pour ne pas dependre de l'encodage du fichier source).
-#define U8_E_ACUTE "\xC3\xA9"
-static const char* kTxtRange = "Port" U8_E_ACUTE "e";
-static const char* kTxtEquipment = "Attirer l'" U8_E_ACUTE "quipement";
 
 static bool MenuIsActive(void*)
 {
     return g_Enabled;
 }
 
-// Une fois par image : les raccourcis clavier marchent aussi quand le heros ne bouge pas (menus).
+// Once per frame: hotkeys also work while the hero is not stepping (menus).
 static void MenuOnFrame(void*)
 {
     HandleHotkeys();
@@ -819,34 +814,34 @@ static void MenuOnFrame(void*)
 
 static void MenuDrawPage(ModMenu::IModMenu* Menu, void*)
 {
-    // --- Colonne gauche ---
-    if (Menu->Toggle(0, 0, "Autoloot actif", g_Enabled))
+    // --- Left column ---
+    if (Menu->Toggle(0, 0, "Autoloot enabled", g_Enabled))
         ToggleEnabled();
 
     char rangeText[32];
     DescribeRange(rangeText, sizeof(rangeText));
 
-    const int step = Menu->Selector(0, 1, kTxtRange, rangeText);
+    const int step = Menu->Selector(0, 1, "Range", rangeText);
     if (step != 0)
     {
         if (step < 0) RangeDecrease(); else RangeIncrease();
         ConfigWriteInt("Range", g_Range);
         DescribeRange(rangeText, sizeof(rangeText));
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Portee : %s", rangeText);
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Range: %s", rangeText);
     }
 
-    if (Menu->Toggle(0, 2, kTxtEquipment, g_Equipment))
+    if (Menu->Toggle(0, 2, "Pull equipment", g_Equipment))
         ToggleEquipment();
 
-    // --- Colonne droite ---
-    if (Menu->Toggle(1, 0, "Ramasser les slormandrites", g_Slormandrites))
+    // --- Right column ---
+    if (Menu->Toggle(1, 0, "Pick up slormandrites", g_Slormandrites))
         ToggleSlormandrites();
 
-    if (Menu->Toggle(1, 1, "Ramasser le slorm ancien", g_ElderSlorm))
+    if (Menu->Toggle(1, 1, "Pick up the elder slorm", g_ElderSlorm))
         ToggleElderSlorm();
 }
 
-// Renvoie vrai si ModMenu.dll est installe et a accepte notre page.
+// Returns true if ModMenu.dll is installed and accepted our page.
 static bool RegisterInModMenu()
 {
     AurieInterfaceBase* base = nullptr;
@@ -856,7 +851,7 @@ static bool RegisterInModMenu()
     ModMenu::ModEntry entry = {};
     entry.Name = "AUTOLOOT";
     entry.Title = "MOD  -  AUTOLOOT";
-    entry.Help = "En jeu : F6 on/off  -  F7 / F8 portee  -  F9 equipement  -  Echap : retour";
+    entry.Help = "In game: F6 on/off  -  F7 / F8 range  -  F9 equipment  -  Esc: back";
     entry.IsActive = MenuIsActive;
     entry.DrawPage = MenuDrawPage;
     entry.OnFrame = MenuOnFrame;
@@ -865,7 +860,7 @@ static bool RegisterInModMenu()
 }
 
 // ============================================================
-// Initialisation du module
+// Module initialization
 // ============================================================
 
 EXPORTED AurieStatus ModuleInitialize(
@@ -879,11 +874,11 @@ EXPORTED AurieStatus ModuleInitialize(
 
     if (!g_Yytk)
     {
-        OutputDebugStringA("[AutoLoot] ERREUR: interface YYToolkit introuvable\n");
+        OutputDebugStringA("[AutoLoot] ERROR: YYToolkit interface not found\n");
         return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
     }
 
-    // --- Fichier de configuration : AutoLoot.ini a cote de la DLL ---
+    // --- Configuration file: AutoLoot.ini next to the DLL ---
     HMODULE hMod = nullptr;
     GetModuleHandleExA(
         GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -901,7 +896,7 @@ EXPORTED AurieStatus ModuleInitialize(
 
     ConfigLoad();
 
-    // --- Installe un hook sur un script GameMaker ---
+    // --- Installs a hook on a GameMaker script ---
     auto installScriptHook = [&](const char* scriptName, const char* hookName,
         PVOID hookFunction, PFUNC_YYGMLScript& original) -> bool
         {
@@ -926,35 +921,35 @@ EXPORTED AurieStatus ModuleInitialize(
             return original != nullptr;
         };
 
-    // --- L'autoloot lui-meme : indispensable ---
+    // --- The autoloot itself: required ---
     if (!installScriptHook("gml_Script_scr_hero_step", "HeroStep",
         reinterpret_cast<PVOID>(HeroStepHook), g_OriginalHeroStep))
     {
-        DbgPrintEx(LOG_SEVERITY_ERROR, "[AutoLoot] impossible d'installer le hook de scr_hero_step");
+        DbgPrintEx(LOG_SEVERITY_ERROR, "[AutoLoot] could not install the scr_hero_step hook");
         return AURIE_OBJECT_NOT_FOUND;
     }
 
-    // --- Page de reglages dans le menu des mods : facultatif, l'autoloot marche sans ---
+    // --- Settings page in the mods menu: optional, autoloot works without it ---
     const bool okMenu = RegisterInModMenu();
 
-    // --- Espion sur scr_pick_up_item (mode Debug uniquement) ---
+    // --- scr_pick_up_item spy (Debug mode only) ---
     if (g_Debug)
     {
         const bool okPick = installScriptHook("gml_Script_scr_pick_up_item", "PickUp",
             reinterpret_cast<PVOID>(PickUpHook), g_OriginalPickUp);
-        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] espion scr_pick_up_item : %s", okPick ? "installe" : "indisponible");
+        DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] scr_pick_up_item spy: %s", okPick ? "installed" : "unavailable");
     }
 
     char rangeText[32];
     DescribeRange(rangeText, sizeof(rangeText));
 
     DbgPrintEx(LOG_SEVERITY_INFO, 
-        "[AutoLoot] pret : autoloot %s, portee %s, equipement %s, slormandrites %s, slorm ancien %s",
-        g_Enabled ? "ACTIVE" : "DESACTIVE", rangeText, g_Equipment ? "OUI" : "NON",
-        g_Slormandrites ? "OUI" : "NON", g_ElderSlorm ? "OUI" : "NON");
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] raccourcis : F6 on/off, F7/F8 portee -/+, F9 equipement");
-    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] menu des mods (ModMenu.dll) : %s",
-        okMenu ? "page de reglages ajoutee" : "absent (raccourcis clavier seulement)");
+        "[AutoLoot] ready: autoloot %s, range %s, equipment %s, slormandrites %s, elder slorm %s",
+        g_Enabled ? "ON" : "OFF", rangeText, g_Equipment ? "YES" : "NO",
+        g_Slormandrites ? "YES" : "NO", g_ElderSlorm ? "YES" : "NO");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] hotkeys: F6 on/off, F7/F8 range -/+, F9 equipment");
+    DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] mods menu (ModMenu.dll): %s",
+        okMenu ? "settings page added" : "not installed (hotkeys only)");
 
     return AURIE_SUCCESS;
 }
