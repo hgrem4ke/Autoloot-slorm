@@ -812,16 +812,38 @@ static void MenuOnFrame(void*)
     HandleHotkeys();
 }
 
+// The menu language comes from ModMenu (English by default, French as an option). GetLanguage
+// and HelpLine only exist from interface version 1.1 on.
+static bool g_MenuHasLanguage = false;
+static bool g_MenuFrench = false;
+
+// French accented letters as explicit UTF-8, so the texts do not depend on the source file
+// encoding. Always concatenated ("Port" FR_E_ACUTE "e") so a following letter is never read
+// as part of the escape.
+#define FR_E_ACUTE    "\xC3\xA9"
+#define FR_E_ACUTE_UP "\xC3\x89"
+
+// Picks the text for the menu's current language.
+static const char* Tr(const char* English, const char* French)
+{
+    return g_MenuFrench ? French : English;
+}
+
 static void MenuDrawPage(ModMenu::IModMenu* Menu, void*)
 {
+    g_MenuFrench = g_MenuHasLanguage && Menu->GetLanguage() == ModMenu::kLangFrench;
+
     // --- Left column ---
-    if (Menu->Toggle(0, 0, "Autoloot enabled", g_Enabled))
+    if (Menu->Toggle(0, 0, Tr("Autoloot enabled", "Autoloot actif"), g_Enabled))
         ToggleEnabled();
 
     char rangeText[32];
-    DescribeRange(rangeText, sizeof(rangeText));
+    if (g_Range <= 0)
+        std::snprintf(rangeText, sizeof(rangeText), "%s", Tr("whole room", "toute la salle"));
+    else
+        std::snprintf(rangeText, sizeof(rangeText), "%d px", g_Range);
 
-    const int step = Menu->Selector(0, 1, "Range", rangeText);
+    const int step = Menu->Selector(0, 1, Tr("Range", "Port" FR_E_ACUTE "e"), rangeText);
     if (step != 0)
     {
         if (step < 0) RangeDecrease(); else RangeIncrease();
@@ -830,15 +852,20 @@ static void MenuDrawPage(ModMenu::IModMenu* Menu, void*)
         DbgPrintEx(LOG_SEVERITY_INFO, "[AutoLoot] Range: %s", rangeText);
     }
 
-    if (Menu->Toggle(0, 2, "Pull equipment", g_Equipment))
+    if (Menu->Toggle(0, 2, Tr("Pull equipment", "Attirer l'" FR_E_ACUTE "quipement"), g_Equipment))
         ToggleEquipment();
 
     // --- Right column ---
-    if (Menu->Toggle(1, 0, "Pick up slormandrites", g_Slormandrites))
+    if (Menu->Toggle(1, 0, Tr("Pick up slormandrites", "Ramasser les slormandrites"), g_Slormandrites))
         ToggleSlormandrites();
 
-    if (Menu->Toggle(1, 1, "Pick up the elder slorm", g_ElderSlorm))
+    if (Menu->Toggle(1, 1, Tr("Pick up the elder slorm", "Ramasser le slorm ancien"), g_ElderSlorm))
         ToggleElderSlorm();
+
+    if (g_MenuHasLanguage)
+        Menu->HelpLine(Tr(
+            "In game: F6 on/off  -  F7 / F8 range  -  F9 equipment  -  Esc: back",
+            "En jeu : F6 on/off  -  F7 / F8 port" FR_E_ACUTE "e  -  F9 " FR_E_ACUTE "quipement  -  " FR_E_ACUTE_UP "chap : retour"));
 }
 
 // Returns true if ModMenu.dll is installed and accepted our page.
@@ -855,6 +882,10 @@ static bool RegisterInModMenu()
     entry.IsActive = MenuIsActive;
     entry.DrawPage = MenuDrawPage;
     entry.OnFrame = MenuOnFrame;
+
+    short major = 0, minor = 0, patch = 0;
+    base->QueryVersion(major, minor, patch);
+    g_MenuHasLanguage = (major > 1) || (major == 1 && minor >= 1);
 
     return static_cast<ModMenu::IModMenu*>(base)->RegisterMod(entry);
 }

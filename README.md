@@ -17,6 +17,7 @@ keyboard and the `AutoLoot.ini` file.
 ## Settings
 
 **In game, with the mouse** (with ModMenu): Options menu → **M** button → **AUTOLOOT** tile.
+The page is in English by default; ModMenu's **EN / FR** switch turns it to French.
 
 **In game, with the keyboard**:
 
