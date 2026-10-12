@@ -127,7 +127,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>YYTK_DEFINE_INTERNAL;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -147,6 +147,7 @@
   <ItemGroup>
     <ClInclude Include="include\Aurie\shared.hpp" />
     <ClInclude Include="include\FunctionWrapper\FunctionWrapper.hpp" />
+    <ClInclude Include="include\ModMenu\ModMenuAPI.hpp" />
     <ClInclude Include="include\YYToolkit\YYTK_Shared.hpp" />
     <ClInclude Include="include\YYToolkit\YYTK_Shared_Base.hpp" />
     <ClInclude Include="include\YYToolkit\YYTK_Shared_Interface.hpp" />

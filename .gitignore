@@ -1,1 +1,12 @@
 .vs/
+*.user
+
+# Fichiers de compilation : on ne garde que la DLL Release
+/AutoLoot/
+/x64/Debug/
+/x64/Release/*
+!/x64/Release/AutoLoot.dll
+
+# Sauvegardes locales
+include_v4/
+source/ModuleMain_*.cpp
